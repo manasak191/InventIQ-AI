@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { inventoryService, notificationService } from '../api/inventoryService';
 
+
 const EMPTY_FORM = { sku:'', name:'', category:'', stock:'', reorder_point:'', price:'', warehouse:'' };
 
 export default function ProductsPage({ T, darkMode }) {
