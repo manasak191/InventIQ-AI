@@ -177,6 +177,18 @@ export const notificationService = {
       return { data, error: null };
     } catch (err) { return { data: null, error: extractError(err).message }; }
   },
+  delete: async (id) => {
+    try {
+      const { data } = await api.delete(`/notifications/${id}`);
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  deleteAllRead: async () => {
+    try {
+      const { data } = await api.delete('/notifications');
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
 };
 
 /* ── REPORTS / ANALYTICS ────────────────────────────── */
@@ -212,8 +224,11 @@ export const aiService = {
   chat: async (message, history = []) => {
     try {
       const { data } = await api.post('/ai/chat', { message, history });
-      return { data, error: null };
-    } catch (err) { return { data: null, error: extractError(err).message }; }
+      return { data, error: null, status: null };
+    } catch (err) {
+      const { message: errMessage, status } = extractError(err);
+      return { data: null, error: errMessage, status };
+    }
   },
   getForecast: async (skuId) => {
     try {

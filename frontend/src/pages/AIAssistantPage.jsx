@@ -36,11 +36,17 @@ export default function AIAssistantPage({ T, darkMode, isAdmin }) {
     setLoading(true);
 
     const history = msgs.slice(-10).map(m => ({ role: m.role==='ai'?'assistant':'user', content: m.text }));
-    const { data, error: err } = await aiService.chat(msg, history);
+    const { data, error: err, status } = await aiService.chat(msg, history);
 
     if (err) {
-      setError('Could not reach AI backend — make sure the server is running.');
-      setMsgs(prev => [...prev, { role:'ai', text:'⚠ Could not connect to backend. Please make sure the server is running at http://127.0.0.1:8000' }]);
+      if (status === 403) {
+        // Restricted topic — admin-only data. Distinct from a network/backend failure.
+        setError('restricted');
+        setMsgs(prev => [...prev, { role:'restricted', text: err || "Access denied: that information is restricted to admin accounts only." }]);
+      } else {
+        setError('network');
+        setMsgs(prev => [...prev, { role:'ai', text:'⚠ Could not connect to backend. Please make sure the server is running at http://127.0.0.1:8000' }]);
+      }
     } else {
       const reply = data?.response || data?.message || data?.reply || 'I could not generate a response. Please try again.';
       setMsgs(prev => [...prev, { role:'ai', text:reply }]);
@@ -75,20 +81,45 @@ export default function AIAssistantPage({ T, darkMode, isAdmin }) {
 
         {/* Messages */}
         <div ref={chatRef} style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:14, paddingRight:4, minHeight:0 }}>
-          {msgs.map((m,i) => (
-            <motion.div key={i} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
-              style={{ display:'flex', justifyContent: m.role==='user'?'flex-end':'flex-start', gap:8 }}>
-              {m.role === 'ai' && (
-                <div style={{ width:30, height:30, borderRadius:'50%', background:accentGrad, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0, alignSelf:'flex-end' }}>✨</div>
-              )}
-              <div style={{ maxWidth:'72%', padding:'12px 16px', borderRadius: m.role==='user'?'18px 18px 4px 18px':'18px 18px 18px 4px', background: m.role==='user'?`linear-gradient(135deg,${T.a1}22,${T.a2}18)`: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', border:`1px solid ${m.role==='user'?T.a1+'44':T.border}`, fontSize:13, color:T.text, lineHeight:1.65, whiteSpace:'pre-wrap' }}>
-                {m.text}
-              </div>
-              {m.role === 'user' && (
-                <div style={{ width:30, height:30, borderRadius:'50%', background:`${T.a2}22`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0, alignSelf:'flex-end', border:`1px solid ${T.a2}44` }}>👤</div>
-              )}
-            </motion.div>
-          ))}
+          {msgs.map((m,i) => {
+            const isRestricted = m.role === 'restricted';
+            const isUser = m.role === 'user';
+            const isAiSide = !isUser; // ai + restricted both render on the left, avatar side
+
+            return (
+              <motion.div key={i} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
+                style={{ display:'flex', justifyContent: isUser?'flex-end':'flex-start', gap:8 }}>
+                {isAiSide && (
+                  <div style={{
+                    width:30, height:30, borderRadius:'50%',
+                    background: isRestricted ? '#ef444422' : accentGrad,
+                    border: isRestricted ? '1px solid #ef4444' : 'none',
+                    display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0, alignSelf:'flex-end'
+                  }}>
+                    {isRestricted ? '🔒' : '✨'}
+                  </div>
+                )}
+                <div style={{
+                  maxWidth:'72%', padding:'12px 16px',
+                  borderRadius: isUser?'18px 18px 4px 18px':'18px 18px 18px 4px',
+                  background: isUser
+                    ? `linear-gradient(135deg,${T.a1}22,${T.a2}18)`
+                    : isRestricted
+                      ? 'rgba(239,68,68,0.10)'
+                      : (darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)'),
+                  border: `1px solid ${isUser ? T.a1+'44' : isRestricted ? '#ef444466' : T.border}`,
+                  fontSize:13, color: isRestricted ? '#ef4444' : T.text, fontWeight: isRestricted ? 600 : 400,
+                  lineHeight:1.65, whiteSpace:'pre-wrap'
+                }}>
+                  {isRestricted && <span style={{ display:'block', fontSize:11, fontWeight:800, letterSpacing:'.04em', marginBottom:4, opacity:.85 }}>RESTRICTED — ADMIN ONLY</span>}
+                  {m.text}
+                </div>
+                {isUser && (
+                  <div style={{ width:30, height:30, borderRadius:'50%', background:`${T.a2}22`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0, alignSelf:'flex-end', border:`1px solid ${T.a2}44` }}>👤</div>
+                )}
+              </motion.div>
+            );
+          })}
           {loading && (
             <div style={{ display:'flex', gap:8, alignItems:'center' }}>
               <div style={{ width:30, height:30, borderRadius:'50%', background:accentGrad, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>✨</div>

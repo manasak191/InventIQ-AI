@@ -1,27 +1,49 @@
 import os
-from fastapi import APIRouter, Depends
+import time
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+from groq import Groq, RateLimitError, APIStatusError
 
 from app.db.database import get_db
 from app.db.models.product import Product
 from app.db.models.supplier import Supplier
 from app.db.models.user import User
+from app.db.models.transaction import Transaction
 from app.core.deps import get_current_user
 
 router = APIRouter(prefix="/ai", tags=["AI Assistant"])
 
-# ── LLM client (Google Gemini — free tier, no credit card) ─────────────────
-# Get a free key at https://aistudio.google.com -> "Get API Key"
-# Add it to your .env (project root, same level as where you run uvicorn from)
-# as: GEMINI_API_KEY=your_key_here
+# ── LLM client (Groq — free tier, fast inference, no training on your data) ─
+# Get a free key at https://console.groq.com -> API Keys -> Create Key
+# Add it to your .env (same folder you run uvicorn from) as: GROQ_API_KEY=...
 load_dotenv()
-API_KEY = os.getenv("GEMINI_API_KEY")
-client = genai.Client(api_key=API_KEY) if API_KEY else None
+API_KEY = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=API_KEY) if API_KEY else None
 
-MODEL = "gemini-2.5-flash"  # generous free tier, 1M context, good reasoning
+MODEL = "llama-3.3-70b-versatile"  # strong reasoning, generous free tier
+
+# ── Admin-only topics ───────────────────────────────────────────────────────
+# Staff dashboard only has: product, transactions, notifications, overview.
+# Anything matching these keywords is restricted to admin and is blocked
+# BEFORE the LLM is ever called — no API cost, no chance of leaking via phrasing.
+RESTRICTED_TOPICS = {
+    "Suppliers": ["supplier", "vendor"],
+    "Warehouse": ["warehouse", "capacity"],
+    "Reports": ["report", "analytics"],
+    "Users": ["user list", "users", "user account", "staff list", "employee list", "how many user"],
+    "Settings": ["setting", "configuration", "config"],
+}
+
+
+def get_restricted_topic(message: str) -> Optional[str]:
+    """Returns the matched admin-only section name if the message touches it, else None."""
+    msg = message.lower()
+    for topic, keywords in RESTRICTED_TOPICS.items():
+        if any(k in msg for k in keywords):
+            return topic
+    return None
 
 
 def build_context(db: Session, is_admin: bool) -> str:
@@ -31,6 +53,7 @@ def build_context(db: Session, is_admin: bool) -> str:
     products = db.query(Product).all()
     suppliers = db.query(Supplier).all()
     users = db.query(User).all() if is_admin else []
+    transactions = db.query(Transaction).order_by(Transaction.id.desc()).all()
 
     if not products:
         return "INVENTORY DATA: No products currently in the database."
@@ -87,13 +110,33 @@ def build_context(db: Session, is_admin: bool) -> str:
             name = f"{u.first_name or ''} {u.last_name or ''}".strip() or "(no name set)"
             lines.append(f"- {name} | {u.role or 'unassigned'} | {'active' if u.is_active else 'inactive'}")
 
+    if transactions:
+        total_in = sum(t.value or 0 for t in transactions if t.type == "IN")
+        total_out = sum(t.value or 0 for t in transactions if t.type == "OUT")
+        in_count = len([t for t in transactions if t.type == "IN"])
+        out_count = len([t for t in transactions if t.type == "OUT"])
+        trf_count = len([t for t in transactions if t.type == "TRF"])
+
+        lines.append(
+            f"\nTRANSACTIONS SUMMARY: {len(transactions)} total — "
+            f"{in_count} stock-in (₹{total_in:,.0f}), {out_count} stock-out (₹{total_out:,.0f}), "
+            f"{trf_count} transfers."
+        )
+        lines.append("\nRECENT TRANSACTIONS (date | type | sku | product | qty | value | warehouse | by | note):")
+        for t in transactions[:50]:  # most recent first (already ordered desc), capped for prompt size
+            date = t.created_at.strftime("%Y-%m-%d") if t.created_at else "unknown"
+            lines.append(
+                f"- {date} | {t.type} | {t.sku} | {t.product_name} | qty={t.qty} | ₹{t.value:,.0f} | "
+                f"{t.warehouse or 'Unassigned'} | {t.user_name or 'unknown'} | {t.note or '-'}"
+            )
+
     return "\n".join(lines)
 
 
 def call_llm(message: str, history: list, context: str) -> str:
     if client is None:
-        return ("⚠ AI backend is not configured yet — add GEMINI_API_KEY to your .env "
-                "(get one free at https://aistudio.google.com) and wire it into your settings module.")
+        return ("⚠ AI backend is not configured yet — add GROQ_API_KEY to your .env "
+                "(get one free at https://console.groq.com) and wire it into your settings module.")
 
     system_prompt = (
         "You are InventIQ, an inventory management assistant. Answer the user's question "
@@ -104,27 +147,35 @@ def call_llm(message: str, history: list, context: str) -> str:
         f"{context}"
     )
 
-    # Gemini uses 'user' / 'model' roles (not 'assistant') and a list of "contents"
-    contents = []
+    # Groq uses plain OpenAI-style {role, content} dicts — 'assistant' role works as-is,
+    # no role translation needed (unlike Gemini's 'model' role).
+    messages = [{"role": "system", "content": system_prompt}]
     for h in history:
-        if not h.get("content"):
-            continue
-        role = "model" if h.get("role") == "assistant" else "user"
-        contents.append(types.Content(role=role, parts=[types.Part(text=h["content"])]))
-    contents.append(types.Content(role="user", parts=[types.Part(text=message)]))
+        if h.get("content"):
+            messages.append({"role": h.get("role", "user"), "content": h["content"]})
+    messages.append({"role": "user", "content": message})
 
-    try:
-        resp = client.models.generate_content(
-            model=MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                max_output_tokens=600,
-            ),
-        )
-        return (resp.text or "").strip() or "I couldn't generate a response. Please try rephrasing."
-    except Exception as e:
-        return f"⚠ AI request failed: {str(e)}"
+    max_retries = 2
+    for attempt in range(max_retries + 1):
+        try:
+            resp = client.chat.completions.create(
+                model=MODEL,
+                messages=messages,
+                max_completion_tokens=600,
+            )
+            text = (resp.choices[0].message.content or "").strip()
+            return text or "I couldn't generate a response. Please try rephrasing."
+        except RateLimitError:
+            # Daily/per-minute quota hit — retrying instantly won't help.
+            return ("⚠ The AI assistant has hit its free-tier rate limit. "
+                    "Please wait a moment and try again, or upgrade your Groq plan for higher limits.")
+        except APIStatusError as e:
+            if e.status_code >= 500 and attempt < max_retries:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            return "⚠ The AI service is temporarily unavailable. Please try again shortly."
+        except Exception:
+            return "⚠ AI request failed unexpectedly. Please try again, or check server logs for details."
 
 
 @router.post("/chat")
@@ -137,6 +188,15 @@ def ai_chat(
     history = payload.get("history", [])
 
     is_admin = (getattr(current_user, "role", "") or "").lower() == "admin"
+
+    if not is_admin:
+        restricted = get_restricted_topic(message)
+        if restricted:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied: {restricted} information is restricted to admin accounts only.",
+            )
+
     context = build_context(db, is_admin)
     reply = call_llm(message, history, context)
     return {"response": reply}

@@ -10,6 +10,7 @@ export default function NotificationsPage({ T, darkMode }) {
   const [sending, setSending]   = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [toast, setToast]       = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const card = { background:T.bgCard, border:`1px solid ${T.border}`, borderRadius:14, padding:22 };
   const tc = (t) => t==='critical'?T.red:t==='warning'?T.yellow:T.green;
@@ -32,6 +33,7 @@ export default function NotificationsPage({ T, darkMode }) {
   });
 
   const unread = notifications.filter(n => !n.read).length;
+  const readCount = notifications.filter(n => n.read).length;
 
   const markRead = async (id) => {
     await notificationService.markRead(id);
@@ -42,6 +44,27 @@ export default function NotificationsPage({ T, darkMode }) {
     await notificationService.markAllRead();
     setNotifications(prev => prev.map(n => ({ ...n, read:true })));
     showToast('All notifications marked as read');
+  };
+
+  const deleteNotification = async (id) => {
+    setDeletingId(id);
+    const { error: err } = await notificationService.delete(id);
+    if (err) {
+      showToast(err, 'error');
+      setDeletingId(null);
+      return;
+    }
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    setDeletingId(null);
+    showToast('Notification deleted');
+  };
+
+  const clearReadNotifications = async () => {
+    if (readCount === 0) return;
+    const { data, error: err } = await notificationService.deleteAllRead();
+    if (err) { showToast(err, 'error'); return; }
+    setNotifications(prev => prev.filter(n => !n.read));
+    showToast(data?.message || 'Cleared read notifications');
   };
 
   const handleSendLowStockEmail = async () => {
@@ -79,6 +102,11 @@ export default function NotificationsPage({ T, darkMode }) {
           <p style={{ fontSize:13, color:T.textSub, marginTop:2 }}>{unread} unread · {notifications.length} total</p>
         </div>
         <div style={{ display:'flex', gap:10 }}>
+          {readCount > 0 && (
+            <button onClick={clearReadNotifications} style={{ padding:'9px 18px', borderRadius:9, border:`1px solid ${T.border}`, background:'transparent', color:T.textMid, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+              🗑 Clear read ({readCount})
+            </button>
+          )}
           {unread > 0 && (
             <button onClick={markAllRead} style={{ padding:'9px 18px', borderRadius:9, border:`1px solid ${T.border}`, background:'transparent', color:T.textMid, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
               ✓ Mark all read
@@ -127,25 +155,34 @@ export default function NotificationsPage({ T, darkMode }) {
 
       {!loading && !error && (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          {filtered.map(n => (
-            <motion.div key={n.id} initial={{ opacity:0, x:-12 }} animate={{ opacity:1, x:0 }}
-              style={{ ...card, border:`1px solid ${tc(n.type)}${n.read?'18':'40'}`, display:'flex', alignItems:'center', gap:14, padding:'16px 20px', opacity: n.read?0.75:1 }}>
-              <div style={{ width:42, height:42, borderRadius:11, background:`${tc(n.type)}18`, border:`1px solid ${tc(n.type)}33`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
-                {n.icon || (n.type==='critical'?'🚨':n.type==='warning'?'⚠️':'✅')}
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, color:T.text, fontWeight: n.read?500:700 }}>{n.message}</div>
-                <div style={{ fontSize:11, color:T.textSub, marginTop:3 }}>{n.source||'System'} · {n.time||n.created_at}</div>
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                {!n.read && <div style={{ width:8, height:8, borderRadius:'50%', background:tc(n.type), flexShrink:0 }} />}
-                <span style={{ fontSize:11, padding:'3px 10px', borderRadius:99, background:`${tc(n.type)}18`, color:tc(n.type), fontWeight:700, border:`1px solid ${tc(n.type)}33`, textTransform:'capitalize' }}>{n.type}</span>
-                {!n.read && (
-                  <button onClick={() => markRead(n.id)} style={{ padding:'5px 12px', borderRadius:7, border:`1px solid ${T.border}`, background:'transparent', cursor:'pointer', fontSize:11, color:T.textMid, fontFamily:'inherit' }}>Mark Read</button>
-                )}
-              </div>
-            </motion.div>
-          ))}
+          <AnimatePresence>
+            {filtered.map(n => (
+              <motion.div key={n.id} initial={{ opacity:0, x:-12 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:40, height:0 }}
+                style={{ ...card, border:`1px solid ${tc(n.type)}${n.read?'18':'40'}`, display:'flex', alignItems:'center', gap:14, padding:'16px 20px', opacity: n.read?0.75:1 }}>
+                <div style={{ width:42, height:42, borderRadius:11, background:`${tc(n.type)}18`, border:`1px solid ${tc(n.type)}33`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
+                  {n.icon || (n.type==='critical'?'🚨':n.type==='warning'?'⚠️':'✅')}
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, color:T.text, fontWeight: n.read?500:700 }}>{n.message}</div>
+                  <div style={{ fontSize:11, color:T.textSub, marginTop:3 }}>{n.source||'System'} · {n.time||n.created_at}</div>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  {!n.read && <div style={{ width:8, height:8, borderRadius:'50%', background:tc(n.type), flexShrink:0 }} />}
+                  <span style={{ fontSize:11, padding:'3px 10px', borderRadius:99, background:`${tc(n.type)}18`, color:tc(n.type), fontWeight:700, border:`1px solid ${tc(n.type)}33`, textTransform:'capitalize' }}>{n.type}</span>
+                  {!n.read && (
+                    <button onClick={() => markRead(n.id)} style={{ padding:'5px 12px', borderRadius:7, border:`1px solid ${T.border}`, background:'transparent', cursor:'pointer', fontSize:11, color:T.textMid, fontFamily:'inherit' }}>Mark Read</button>
+                  )}
+                  <button
+                    onClick={() => deleteNotification(n.id)}
+                    disabled={deletingId === n.id}
+                    title="Delete notification"
+                    style={{ width:30, height:30, borderRadius:7, border:`1px solid ${T.border}`, background:'transparent', cursor: deletingId===n.id?'not-allowed':'pointer', fontSize:13, color:T.red, fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', opacity: deletingId===n.id?.5:1, flexShrink:0 }}>
+                    {deletingId === n.id ? '⏳' : '🗑'}
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
           {filtered.length === 0 && (
             <div style={{ textAlign:'center', padding:48, color:T.textSub }}>
               <div style={{ fontSize:32, marginBottom:10 }}>🔔</div>

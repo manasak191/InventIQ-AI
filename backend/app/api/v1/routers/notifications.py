@@ -59,6 +59,55 @@ def mark_all_read(
     return {"message": "All notifications marked as read"}
 
 
+@router.delete("/{notification_id}")
+def delete_notification(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    n = db.query(Notification).filter(Notification.id == notification_id).first()
+    if not n:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    db.delete(n)
+    db.commit()
+    return {"message": "Notification deleted", "id": notification_id}
+
+
+@router.delete("")
+def delete_all_read(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Bulk-delete all read notifications (keeps unread ones intact)."""
+    deleted = db.query(Notification).filter(Notification.read == True).delete()
+    db.commit()
+    return {"message": f"Deleted {deleted} read notification(s)"}
+
+
+@router.delete("/{notification_id}")
+def delete_notification(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    n = db.query(Notification).filter(Notification.id == notification_id).first()
+    if not n:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    db.delete(n)
+    db.commit()
+    return {"message": "Notification deleted", "id": notification_id}
+
+
+@router.delete("")
+def delete_all_read(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    deleted = db.query(Notification).filter(Notification.read == True).delete()
+    db.commit()
+    return {"message": f"Deleted {deleted} read notification(s)"}
+
+
 @router.post("/low-stock-alert")
 def send_low_stock_alert(
     payload: LowStockAlertRequest,
@@ -67,14 +116,41 @@ def send_low_stock_alert(
 ):
     """
     Sends a low-stock email to all admin users and creates a notification record.
+    Deduplicates: if an identical, still-unread alert already exists for a product
+    (same SKU + same stock count + same reorder point), it's skipped — no repeat
+    email, no repeat notification — until the stock level actually changes.
     """
     products = db.query(Product).filter(Product.id.in_(payload.product_ids)).all()
     if not products:
         raise HTTPException(status_code=404, detail="No matching products found")
 
+    # Build the exact message each product WOULD generate, then check which ones
+    # already exist (unread) — those are skipped entirely, no email, no new row.
+    new_products = []
+    skipped_skus = []
+    for p in products:
+        message = f"{p.sku} low stock — {p.stock} units left (reorder point: {p.reorder_point})"
+        already_alerted = (
+            db.query(Notification)
+            .filter(Notification.message == message, Notification.read == False)
+            .first()
+        )
+        if already_alerted:
+            skipped_skus.append(p.sku)
+        else:
+            new_products.append(p)
+
+    if not new_products:
+        return {
+            "message": "No new alerts — all selected products were already alerted and unread.",
+            "sent_to": [],
+            "products": [],
+            "skipped_skus": skipped_skus,
+        }
+
     product_dicts = [
         {"sku": p.sku, "name": p.name, "stock": p.stock, "reorder_point": p.reorder_point}
-        for p in products
+        for p in new_products
     ]
 
     # Find all admin users to notify
@@ -89,8 +165,8 @@ def send_low_stock_alert(
         if success:
             sent_to.append(email)
 
-    # Create an in-app notification record too
-    for p in products:
+    # Create an in-app notification record only for genuinely new alerts
+    for p in new_products:
         notif = Notification(
             type="critical" if p.stock <= p.reorder_point * 0.5 else "warning",
             icon="🚨" if p.stock <= p.reorder_point * 0.5 else "⚠️",
@@ -102,7 +178,8 @@ def send_low_stock_alert(
     db.commit()
 
     return {
-        "message": f"Low stock alert sent for {len(products)} product(s)",
+        "message": f"Low stock alert sent for {len(new_products)} product(s)",
         "sent_to": sent_to,
         "products": product_dicts,
+        "skipped_skus": skipped_skus,
     }
