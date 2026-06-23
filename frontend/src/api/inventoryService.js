@@ -298,3 +298,37 @@ export const searchService = {
     } catch (err) { return { data: null, error: extractError(err).message }; }
   },
 };
+
+
+export const warehouseService = {
+  getAll: async (params = {}) => {
+    try {
+      const { data } = await api.get('/inventory/warehouses', { params });
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  getOne: async (id) => {
+    try {
+      const { data } = await api.get(`/inventory/warehouses/${id}`);
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  create: async (payload) => {
+    try {
+      const { data } = await api.post('/inventory/warehouses', payload);
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  update: async (id, payload) => {
+    try {
+      const { data } = await api.put(`/inventory/warehouses/${id}`, payload);
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  delete: async (id) => {
+    try {
+      const { data } = await api.delete(`/inventory/warehouses/${id}`);
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+};
