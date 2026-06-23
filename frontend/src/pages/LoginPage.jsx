@@ -300,7 +300,7 @@ const LoginPage = ({ darkMode, onToggleDarkMode, onNavigateRegister, onNavigateL
                     <motion.div key={role} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: .25 }}
                       style={{ padding: '11px 15px', borderRadius: 10, background: darkMode ? `${role === 'admin' ? T.a2 : T.a1}10` : `${role === 'admin' ? T.a2 : T.a1}0A`, border: `1px solid ${role === 'admin' ? T.a2 : T.a1}30`, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontSize: 18 }}>{role === 'admin' ? '🛡️' : '👤'}</span>
-                      <span style={{ fontSize: 12, color: T.textMid, lineHeight: 1.5 }}>{role === 'admin' ? 'Admin access: full system control, user management & all analytics.' : 'User access: inventory ops, warehouse management & AI assistant.'}</span>
+                      <span style={{ fontSize: 12, color: T.textMid, lineHeight: 1.5 }}>{role === 'admin' ? 'Admin access: full system control, user management & all analytics.' : 'User access: inventory ops & AI assistant.'}</span>
                     </motion.div>
                   </AnimatePresence>
 

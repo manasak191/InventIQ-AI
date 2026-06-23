@@ -65,6 +65,7 @@ export const inventoryService = {
   },
 };
 
+
 /* ── SUPPLIERS ──────────────────────────────────────── */
 export const supplierService = {
   getAll: async (params = {}) => {
@@ -267,6 +268,17 @@ export const dashboardService = {
   getWarehouseStats: async () => {
     try {
       const { data } = await api.get('/dashboard/warehouses');
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+};
+
+
+/* ── GLOBAL SEARCH ────────────────────────────────────── */
+export const searchService = {
+  search: async (q) => {
+    try {
+      const { data } = await api.get('/dashboard/search', { params: { q } });
       return { data, error: null };
     } catch (err) { return { data: null, error: extractError(err).message }; }
   },
