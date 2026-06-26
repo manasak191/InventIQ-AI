@@ -10,6 +10,7 @@ import TransactionsPage  from './TransactionsPage';
 import NotificationsPage from './NotificationsPage';
 import ReportsPage       from './ReportsPage';
 import AIAssistantPage   from './AIAssistantPage';
+import MessagesPage      from './MessagesPage';
 
 // User nav — intentionally fewer items than admin (no suppliers/warehouses/users management)
 const USER_NAV = [
@@ -18,6 +19,7 @@ const USER_NAV = [
   { id:'stock-lookup',  icon:'🔍', label:'Stock Lookup' },
   { id:'reports',       icon:'📊', label:'Reports' },
   { id:'notifications', icon:'🔔', label:'Notifications' },
+  { id:'messages',      icon:'💬', label:'Messages' },
   { id:'ai',            icon:'✨', label:'AI Assistant' },
 ];
 
@@ -490,7 +492,7 @@ export default function UserDashboard({ darkMode, onToggleDarkMode, onLogout, us
               {active === 'reports'       && <ReportsPage       T={T} darkMode={darkMode} />}
               {active === 'ai'            && <AIAssistantPage   T={T} darkMode={darkMode} isAdmin={false} />}
               {active === 'notifications' && <NotificationsPage T={T} darkMode={darkMode} isAdmin={false} />}
-
+              {active === 'messages'      && <MessagesPage      T={T} darkMode={darkMode} isAdmin={false} />}
             </motion.div>
           </AnimatePresence>
         </main>

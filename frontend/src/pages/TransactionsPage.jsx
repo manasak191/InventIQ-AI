@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { transactionService } from '../api/inventoryService';
+import { transactionService, inventoryService, warehouseService } from '../api/inventoryService';
 
 const EMPTY_FORM = { type:'IN', sku:'', product:'', qty:'', value:'', warehouse:'', note:'' };
 
-export default function TransactionsPage({ T, darkMode }) {
+// isAdmin controls: delete transactions (future), see all users' transactions vs own
+// Both admin and user can LOG a transaction (stock in/out is part of daily user work)
+// Admin sees all transactions; user sees all but cannot delete
+export default function TransactionsPage({ T, darkMode, isAdmin = false }) {
   const [txns, setTxns]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -14,6 +17,10 @@ export default function TransactionsPage({ T, darkMode }) {
   const [form, setForm]       = useState(EMPTY_FORM);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState(null);
+
+  // Real products & warehouses to populate dropdowns — no more free-typing SKUs/names.
+  const [products, setProducts]     = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
 
   const card = { background:T.bgCard, border:`1px solid ${T.border}`, borderRadius:14, padding:22 };
   const typeColor = (t) => t==='IN'?T.green:t==='OUT'?T.red:T.a3;
@@ -27,7 +34,27 @@ export default function TransactionsPage({ T, darkMode }) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  const loadMeta = async () => {
+    const [prodRes, whRes] = await Promise.all([
+      inventoryService.getAll(),
+      warehouseService.getAll(),
+    ]);
+    setProducts(Array.isArray(prodRes.data) ? prodRes.data : []);
+    setWarehouses(Array.isArray(whRes.data) ? whRes.data : []);
+  };
+
+  useEffect(() => { load(); loadMeta(); }, []);
+
+  // Picking a product auto-fills its name and its current warehouse (still editable after).
+  const handleSelectProduct = (sku) => {
+    const p = products.find(p => p.sku === sku);
+    setForm(prev => ({
+      ...prev,
+      sku,
+      product: p?.name || '',
+      warehouse: p?.warehouse ? p.warehouse : prev.warehouse,
+    }));
+  };
 
   const filtered = txns.filter(t => {
     const matchType   = filter === 'all' || t.type === filter;
@@ -39,7 +66,7 @@ export default function TransactionsPage({ T, darkMode }) {
   const totalOut = txns.filter(t => t.type==='OUT').reduce((a,t) => a + (t.value||0), 0);
 
   const handleAdd = async () => {
-    if (!form.sku || !form.qty) { showToast('SKU and Qty are required', 'error'); return; }
+    if (!form.sku || !form.qty) { showToast('Product and Qty are required', 'error'); return; }
     setSaving(true);
     const payload = { ...form, qty: Number(form.qty), value: Number(form.value) };
     const { data, error: err } = await transactionService.create(payload);
@@ -61,13 +88,18 @@ export default function TransactionsPage({ T, darkMode }) {
 
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
         <div>
-          <h1 style={{ fontSize:'1.4rem', fontWeight:900, color:T.text, letterSpacing:'-.03em' }}>Transactions</h1>
-          <p style={{ fontSize:13, color:T.textSub, marginTop:2 }}>All stock movements — in, out, transfers</p>
+          <h1 style={{ fontSize:'1.4rem', fontWeight:900, color:T.text, letterSpacing:'-.03em' }}>
+            {isAdmin ? 'Transactions' : 'My Transactions'}
+          </h1>
+          <p style={{ fontSize:13, color:T.textSub, marginTop:2 }}>
+            {isAdmin ? 'All stock movements — in, out, transfers' : 'Log and view your stock movements'}
+          </p>
         </div>
-        <button onClick={() => setModal(true)} style={{ padding:'9px 18px', borderRadius:9, border:'none', background:`linear-gradient(135deg,${T.a1},${T.a3})`, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>+ Log Transaction</button>
+        <button onClick={() => setModal(true)} style={{ padding:'9px 18px', borderRadius:9, border:'none', background:`linear-gradient(135deg,${T.a1},${T.a3})`, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+          + Log Transaction
+        </button>
       </div>
 
-      {/* KPI cards */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:20 }}>
         {[
           { l:'Total', v:txns.length, c:T.a1 },
@@ -82,7 +114,6 @@ export default function TransactionsPage({ T, darkMode }) {
         ))}
       </div>
 
-      {/* Value summary */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:20 }}>
         <div style={{ ...card, border:`1px solid ${T.green}28`, display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 20px' }}>
           <div>
@@ -100,7 +131,6 @@ export default function TransactionsPage({ T, darkMode }) {
         </div>
       </div>
 
-      {/* Filters */}
       <div style={{ display:'flex', gap:10, marginBottom:16 }}>
         {[{id:'all',l:'All'},{id:'IN',l:'Stock In'},{id:'OUT',l:'Stock Out'},{id:'TRF',l:'Transfers'}].map(f => (
           <button key={f.id} onClick={() => setFilter(f.id)}
@@ -119,7 +149,9 @@ export default function TransactionsPage({ T, darkMode }) {
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
               <tr style={{ borderBottom:`1px solid ${T.border}` }}>
-                {['Type','SKU','Product','Qty','Value (₹)','Warehouse','User','Date','Note'].map(h => (
+                {['Type','SKU','Product','Qty','Value (₹)','Warehouse','User','Date','Note',
+                  ...(isAdmin ? ['Actions'] : [])
+                ].map(h => (
                   <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:T.textSub, letterSpacing:'.05em', textTransform:'uppercase' }}>{h}</th>
                 ))}
               </tr>
@@ -141,17 +173,22 @@ export default function TransactionsPage({ T, darkMode }) {
                   <td style={{ padding:'12px 12px', fontSize:12, color:T.textMid }}>{t.user}</td>
                   <td style={{ padding:'12px 12px', fontSize:12, color:T.textSub }}>{t.date}</td>
                   <td style={{ padding:'12px 12px', fontSize:12, color:T.textSub }}>{t.note}</td>
+                  {isAdmin && (
+                    <td style={{ padding:'12px 12px' }}>
+                      <span style={{ fontSize:11, color:T.textSub }}>—</span>
+                    </td>
+                  )}
                 </motion.tr>
               ))}
               {filtered.length === 0 && !loading && (
-                <tr><td colSpan={9} style={{ textAlign:'center', padding:40, color:T.textSub }}>No transactions yet. Log your first stock movement above.</td></tr>
+                <tr><td colSpan={isAdmin ? 10 : 9} style={{ textAlign:'center', padding:40, color:T.textSub }}>No transactions yet. Log your first stock movement above.</td></tr>
               )}
             </tbody>
           </table>
         )}
       </div>
 
-      {/* Add Modal */}
+      {/* Log Transaction Modal — available to both admin and user */}
       <AnimatePresence>
         {modal && (
           <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
@@ -165,16 +202,44 @@ export default function TransactionsPage({ T, darkMode }) {
                 <div>
                   <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase' }}>Type</div>
                   <select value={form.type} onChange={e => setForm(p => ({ ...p, type:e.target.value }))}
-                    style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'#0D1526':'#fff', color:T.text, fontSize:13, outline:'none', fontFamily:'inherit' }}>
-                    <option value="IN">Stock In</option>
-                    <option value="OUT">Stock Out</option>
-                    <option value="TRF">Transfer</option>
+                    style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'#0D1526':'#fff', color:T.text, fontSize:13, outline:'none', fontFamily:'inherit', colorScheme: darkMode ? 'dark' : 'light' }}>
+                    <option style={{ background: T.bgCard, color: T.text }} value="IN">Stock In</option>
+                    <option style={{ background: T.bgCard, color: T.text }} value="OUT">Stock Out</option>
+                    <option style={{ background: T.bgCard, color: T.text }} value="TRF">Transfer</option>
                   </select>
                 </div>
+
+                {/* Product dropdown — replaces free-typed SKU. Selecting a product auto-fills Product Name. */}
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase' }}>Product (SKU)</div>
+                  <select value={form.sku} onChange={e => handleSelectProduct(e.target.value)}
+                    style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', color:T.text, fontSize:13, outline:'none', fontFamily:'inherit', colorScheme: darkMode ? 'dark' : 'light' }}>
+                    <option style={{ background: T.bgCard, color: T.text }} value="">{products.length ? 'Select a product…' : 'No products found'}</option>
+                    {products.map(p => (
+                      <option style={{ background: T.bgCard, color: T.text }} key={p.sku} value={p.sku}>{p.sku} — {p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase' }}>Product Name</div>
+                  <input value={form.product} readOnly placeholder="Auto-filled from product"
+                    style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.02)', color:T.textSub, fontSize:13, outline:'none', fontFamily:'inherit', cursor:'not-allowed' }} />
+                </div>
+
+                {/* Warehouse dropdown — sourced from real warehouses instead of free text */}
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase' }}>Warehouse</div>
+                  <select value={form.warehouse} onChange={e => setForm(p => ({ ...p, warehouse:e.target.value }))}
+                    style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', color:T.text, fontSize:13, outline:'none', fontFamily:'inherit', colorScheme: darkMode ? 'dark' : 'light' }}>
+                    <option style={{ background: T.bgCard, color: T.text }} value="">{warehouses.length ? 'Select a warehouse…' : 'No warehouses found'}</option>
+                    {warehouses.map(w => (
+                      <option style={{ background: T.bgCard, color: T.text }} key={w.id} value={w.name}>{w.name}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {[
-                  { key:'sku', label:'SKU', placeholder:'SKU-001' },
-                  { key:'product', label:'Product Name', placeholder:'Product name' },
-                  { key:'warehouse', label:'Warehouse', placeholder:'WH-A' },
                   { key:'qty', label:'Qty', placeholder:'50', type:'number' },
                   { key:'value', label:'Value (₹)', placeholder:'10000', type:'number' },
                 ].map(f => (

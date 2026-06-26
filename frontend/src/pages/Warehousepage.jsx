@@ -150,26 +150,26 @@ export default function WarehousePage({ T, darkMode }) {
 
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
             style={{ padding:'9px 12px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', color:T.text, fontSize:13, fontFamily:'inherit', colorScheme: darkMode ? 'dark' : 'light' }}>
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="all">All Status</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="active">Active</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="inactive">Inactive</option>
           </select>
 
           <select value={loadFilter} onChange={e => setLoadFilter(e.target.value)}
             style={{ padding:'9px 12px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', color:T.text, fontSize:13, fontFamily:'inherit', colorScheme: darkMode ? 'dark' : 'light' }}>
-            <option value="all">All Load</option>
-            <option value="high">High (&gt;80%)</option>
-            <option value="medium">Medium (55-80%)</option>
-            <option value="low">Low (&lt;55%)</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="all">All Load</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="high">High (&gt;80%)</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="medium">Medium (55-80%)</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="low">Low (&lt;55%)</option>
           </select>
 
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
             style={{ padding:'9px 12px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', color:T.text, fontSize:13, fontFamily:'inherit', colorScheme: darkMode ? 'dark' : 'light' }}>
-            <option value="name">Sort: Name</option>
-            <option value="stock">Sort: Total Stock</option>
-            <option value="value">Sort: Total Value</option>
-            <option value="capacity">Sort: Capacity</option>
-            <option value="utilization">Sort: Utilization</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="name">Sort: Name</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="stock">Sort: Total Stock</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="value">Sort: Total Value</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="capacity">Sort: Capacity</option>
+            <option style={{ background: T.bgCard, color: T.text }} value="utilization">Sort: Utilization</option>
           </select>
 
           <button onClick={load} style={{ padding:'9px 14px', borderRadius:9, border:`1px solid ${T.border}`, background:'transparent', color:T.textMid, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>🔄 Refresh</button>
@@ -399,8 +399,8 @@ export default function WarehousePage({ T, darkMode }) {
                   <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase', letterSpacing:'.05em' }}>Status</div>
                   <select value={form.status} onChange={e => setForm(p => ({ ...p, status:e.target.value }))}
                     style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', color:T.text, fontSize:13, outline:'none', fontFamily:'inherit', colorScheme: darkMode ? 'dark' : 'light' }}>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
+                    <option style={{ background: T.bgCard, color: T.text }} value="active">Active</option>
+                    <option style={{ background: T.bgCard, color: T.text }} value="inactive">Inactive</option>
                   </select>
                 </div>
               </div>

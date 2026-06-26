@@ -191,6 +191,46 @@ export const notificationService = {
   },
 };
 
+/* ── MESSAGES (user ↔ admin) ────────────────────────── */
+export const messageService = {
+  create: async (payload) => {
+    try {
+      const { data } = await api.post('/messages', payload);
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  getMine: async () => {
+    try {
+      const { data } = await api.get('/messages/my');
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  getAll: async (params = {}) => {
+    try {
+      const { data } = await api.get('/messages', { params });
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  reply: async (id, reply) => {
+    try {
+      const { data } = await api.patch(`/messages/${id}/reply`, { reply });
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  updateStatus: async (id, status) => {
+    try {
+      const { data } = await api.patch(`/messages/${id}/status`, { status });
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  delete: async (id) => {
+    try {
+      const { data } = await api.delete(`/messages/${id}`);
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+};
+
 /* ── REPORTS / ANALYTICS ────────────────────────────── */
 export const reportService = {
   getSummary: async (params = {}) => {
@@ -332,3 +372,5 @@ export const warehouseService = {
     } catch (err) { return { data: null, error: extractError(err).message }; }
   },
 };
+
+

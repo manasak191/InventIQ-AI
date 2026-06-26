@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { inventoryService, notificationService } from '../api/inventoryService';
-
+import { inventoryService, notificationService, warehouseService } from '../api/inventoryService';
 
 const EMPTY_FORM = { sku:'', name:'', category:'', stock:'', reorder_point:'', price:'', warehouse:'' };
 
-export default function ProductsPage({ T, darkMode }) {
+// isAdmin = true  → Add + Edit + Delete + Export CSV
+// isAdmin = false → Add + Edit only, NO Delete, NO Export
+export default function ProductsPage({ T, darkMode, isAdmin = false }) {
   const [items, setItems]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -16,6 +17,9 @@ export default function ProductsPage({ T, darkMode }) {
   const [editId, setEditId]   = useState(null);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState(null);
+
+  // Real warehouses for the dropdown — no more free-typed warehouse names.
+  const [warehouses, setWarehouses] = useState([]);
 
   const card = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: 22 };
   const sc = (s) => s === 'critical' ? T.red : s === 'low' ? T.yellow : T.green;
@@ -42,7 +46,12 @@ export default function ProductsPage({ T, darkMode }) {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  const loadWarehouses = async () => {
+    const { data } = await warehouseService.getAll();
+    setWarehouses(Array.isArray(data) ? data : []);
+  };
+
+  useEffect(() => { load(); loadWarehouses(); }, []);
 
   const filtered = items.filter(item => {
     const matchSearch = item.name?.toLowerCase().includes(search.toLowerCase()) || item.sku?.toLowerCase().includes(search.toLowerCase());
@@ -67,8 +76,9 @@ export default function ProductsPage({ T, darkMode }) {
     setSaving(false); setModal(null); load();
   };
 
+  // Delete — admin only
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this product?')) return;
+    if (!window.confirm('Delete this product? This cannot be undone.')) return;
     const { error: err } = await inventoryService.delete(id);
     if (err) { showToast(err, 'error'); return; }
     showToast('Product deleted!'); load();
@@ -89,21 +99,36 @@ export default function ProductsPage({ T, darkMode }) {
 
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
         <div>
-          <h1 style={{ fontSize:'1.4rem', fontWeight:900, color:T.text, letterSpacing:'-.03em' }}>Products & Inventory</h1>
-          <p style={{ fontSize:13, color:T.textSub, marginTop:2 }}>{items.length} SKUs across all warehouses</p>
+          <h1 style={{ fontSize:'1.4rem', fontWeight:900, color:T.text, letterSpacing:'-.03em' }}>
+            {isAdmin ? 'Products & Inventory' : 'Stock Lookup'}
+          </h1>
+          <p style={{ fontSize:13, color:T.textSub, marginTop:2 }}>
+            {items.length} SKUs across all warehouses
+            {!isAdmin && ' · Add & Edit allowed · Delete restricted to Admin'}
+          </p>
         </div>
         <div style={{ display:'flex', gap:10 }}>
-          <button onClick={handleExport} style={{ padding:'9px 18px', borderRadius:9, border:`1px solid ${T.border}`, background:'transparent', color:T.textMid, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>📤 Export CSV</button>
-          <button onClick={openAdd} style={{ padding:'9px 18px', borderRadius:9, border:'none', background:`linear-gradient(135deg,${T.a1},${T.a2})`, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>+ Add Product</button>
+          {/* Export CSV — admin only */}
+          {isAdmin && (
+            <button onClick={handleExport}
+              style={{ padding:'9px 18px', borderRadius:9, border:`1px solid ${T.border}`, background:'transparent', color:T.textMid, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+              📤 Export CSV
+            </button>
+          )}
+          {/* Add Product — both admin and user */}
+          <button onClick={openAdd}
+            style={{ padding:'9px 18px', borderRadius:9, border:'none', background:`linear-gradient(135deg,${T.a1},${T.a2})`, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+            + Add Product
+          </button>
         </div>
       </div>
 
       <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap' }}>
         {[
-          { l:'All', v:items.length, id:'all', c:T.a1 },
-          { l:'Critical', v:items.filter(i=>i.status==='critical').length, id:'critical', c:T.red },
-          { l:'Low Stock', v:items.filter(i=>i.status==='low').length, id:'low', c:T.yellow },
-          { l:'Healthy', v:items.filter(i=>i.status==='ok').length, id:'ok', c:T.green },
+          { l:'All',       v: items.length,                                    id:'all',      c:T.a1 },
+          { l:'Critical',  v: items.filter(i=>i.status==='critical').length,   id:'critical', c:T.red },
+          { l:'Low Stock', v: items.filter(i=>i.status==='low').length,        id:'low',      c:T.yellow },
+          { l:'Healthy',   v: items.filter(i=>i.status==='ok').length,         id:'ok',       c:T.green },
         ].map(s => (
           <button key={s.id} onClick={() => setFilter(s.id)}
             style={{ padding:'6px 14px', borderRadius:99, background: filter===s.id ? `${s.c}22` : `${s.c}0E`, border:`1px solid ${filter===s.id ? s.c : s.c+'33'}`, display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontFamily:'inherit' }}>
@@ -118,7 +143,7 @@ export default function ProductsPage({ T, darkMode }) {
 
       <div style={card}>
         {loading && <div style={{ textAlign:'center', padding:40, color:T.textSub }}>Loading inventory…</div>}
-        {error  && <div style={{ textAlign:'center', padding:40, color:T.red }}>⚠ {error} — make sure the backend is running at http://127.0.0.1:8000</div>}
+        {error   && <div style={{ textAlign:'center', padding:40, color:T.red }}>⚠ {error} — make sure the backend is running at http://127.0.0.1:8000</div>}
         {!loading && !error && (
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
@@ -133,7 +158,9 @@ export default function ProductsPage({ T, darkMode }) {
                 <tr key={item.id} className="row-hover" style={{ borderBottom:`1px solid ${T.border}`, transition:'background .15s' }}>
                   <td style={{ padding:'12px 12px', fontSize:12, fontWeight:700, color:T.a2 }}>{item.sku}</td>
                   <td style={{ padding:'12px 12px', fontSize:13, color:T.text }}>{item.name}</td>
-                  <td style={{ padding:'12px 12px' }}><span style={{ fontSize:11, padding:'3px 9px', borderRadius:99, background:`${T.a1}18`, color:T.a1 }}>{item.category}</span></td>
+                  <td style={{ padding:'12px 12px' }}>
+                    <span style={{ fontSize:11, padding:'3px 9px', borderRadius:99, background:`${T.a1}18`, color:T.a1 }}>{item.category}</span>
+                  </td>
                   <td style={{ padding:'12px 12px', fontSize:13, fontWeight:700, color: item.stock <= item.reorder_point ? T.red : T.text }}>{item.stock}</td>
                   <td style={{ padding:'12px 12px', fontSize:12, color:T.textMid }}>{item.reorder_point}</td>
                   <td style={{ padding:'12px 12px', fontSize:13, color:T.text }}>₹{Number(item.price).toLocaleString()}</td>
@@ -145,20 +172,35 @@ export default function ProductsPage({ T, darkMode }) {
                   </td>
                   <td style={{ padding:'12px 12px' }}>
                     <div style={{ display:'flex', gap:5 }}>
-                      <button onClick={() => openEdit(item)} style={{ fontSize:11, padding:'4px 9px', borderRadius:6, border:`1px solid ${T.border}`, background:'transparent', cursor:'pointer', color:T.textMid, fontFamily:'inherit' }}>Edit</button>
-                      <button onClick={() => handleDelete(item.id)} style={{ fontSize:11, padding:'4px 9px', borderRadius:6, border:`1px solid ${T.red}44`, background:`${T.red}0E`, cursor:'pointer', color:T.red, fontFamily:'inherit' }}>Del</button>
+                      {/* Edit — both admin and user */}
+                      <button onClick={() => openEdit(item)}
+                        style={{ fontSize:11, padding:'4px 9px', borderRadius:6, border:`1px solid ${T.border}`, background:'transparent', cursor:'pointer', color:T.textMid, fontFamily:'inherit' }}>
+                        Edit
+                      </button>
+                      {/* Delete — admin only */}
+                      {isAdmin && (
+                        <button onClick={() => handleDelete(item.id)}
+                          style={{ fontSize:11, padding:'4px 9px', borderRadius:6, border:`1px solid ${T.red}44`, background:`${T.red}0E`, cursor:'pointer', color:T.red, fontFamily:'inherit' }}>
+                          Del
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
               ))}
               {filtered.length === 0 && !loading && (
-                <tr><td colSpan={9} style={{ textAlign:'center', padding:40, color:T.textSub }}>No products found. Add your first product using the button above.</td></tr>
+                <tr>
+                  <td colSpan={9} style={{ textAlign:'center', padding:40, color:T.textSub }}>
+                    No products found. {isAdmin ? 'Add your first product using the button above.' : 'Use the Add Product button to add one.'}
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         )}
       </div>
 
+      {/* Add/Edit Modal — available to both admin and user */}
       <AnimatePresence>
         {modal && (
           <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
@@ -167,28 +209,52 @@ export default function ProductsPage({ T, darkMode }) {
             <motion.div initial={{ scale:.92, opacity:0 }} animate={{ scale:1, opacity:1 }} exit={{ scale:.92, opacity:0 }}
               onClick={e => e.stopPropagation()}
               style={{ background:T.bgCard, borderRadius:16, padding:28, width:480, boxShadow:'0 24px 64px rgba(0,0,0,.5)', border:`1px solid ${T.border}` }}>
-              <div style={{ fontWeight:900, fontSize:16, color:T.text, marginBottom:20 }}>{modal === 'add' ? '+ Add Product' : '✏️ Edit Product'}</div>
+              <div style={{ fontWeight:900, fontSize:16, color:T.text, marginBottom:20 }}>
+                {modal === 'add' ? '+ Add Product' : '✏️ Edit Product'}
+              </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
                 {[
-                  { key:'sku', label:'SKU', placeholder:'SKU-001' },
-                  { key:'name', label:'Product Name', placeholder:'Product name', span:2 },
-                  { key:'category', label:'Category', placeholder:'Electronics' },
-                  { key:'warehouse', label:'Warehouse', placeholder:'WH-A' },
-                  { key:'stock', label:'Stock Qty', placeholder:'100', type:'number' },
-                  { key:'reorder_point', label:'Reorder Point', placeholder:'20', type:'number' },
-                  { key:'price', label:'Price (₹)', placeholder:'999', type:'number' },
+                  { key:'sku',           label:'SKU',          placeholder:'SKU-001' },
+                  { key:'name',          label:'Product Name', placeholder:'Product name', span:2 },
+                  { key:'category',      label:'Category',     placeholder:'Electronics' },
+                  { key:'stock',         label:'Stock Qty',    placeholder:'100', type:'number' },
+                  { key:'reorder_point', label:'Reorder Point',placeholder:'20',  type:'number' },
+                  { key:'price',         label:'Price (₹)',    placeholder:'999', type:'number' },
                 ].map(f => (
                   <div key={f.key} style={{ gridColumn: f.span ? `span ${f.span}` : 'auto' }}>
                     <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase', letterSpacing:'.05em' }}>{f.label}</div>
-                    <input type={f.type || 'text'} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    <input
+                      type={f.type || 'text'}
+                      value={form[f.key]}
+                      onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
                       placeholder={f.placeholder}
-                      style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', color:T.text, fontSize:13, outline:'none', fontFamily:'inherit' }} />
+                      style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', color:T.text, fontSize:13, outline:'none', fontFamily:'inherit' }}
+                    />
                   </div>
                 ))}
+
+                {/* Warehouse — now a dropdown sourced from real warehouses instead of free text */}
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase', letterSpacing:'.05em' }}>Warehouse</div>
+                  <select
+                    value={form.warehouse}
+                    onChange={e => setForm(p => ({ ...p, warehouse: e.target.value }))}
+                    style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', color:T.text, fontSize:13, outline:'none', fontFamily:'inherit', colorScheme: darkMode ? 'dark' : 'light' }}
+                  >
+                    <option style={{ background: T.bgCard, color: T.text }} value="">{warehouses.length ? 'Select a warehouse…' : 'No warehouses found'}</option>
+                    {warehouses.map(w => (
+                      <option style={{ background: T.bgCard, color: T.text }} key={w.id} value={w.name}>{w.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div style={{ display:'flex', gap:10, marginTop:22, justifyContent:'flex-end' }}>
-                <button onClick={() => setModal(null)} style={{ padding:'10px 20px', borderRadius:9, border:`1px solid ${T.border}`, background:'transparent', cursor:'pointer', fontSize:13, color:T.textMid, fontFamily:'inherit' }}>Cancel</button>
-                <button onClick={handleSave} disabled={saving} style={{ padding:'10px 24px', borderRadius:9, border:'none', background:`linear-gradient(135deg,${T.a1},${T.a2})`, color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:'inherit', opacity: saving ? .7 : 1 }}>
+                <button onClick={() => setModal(null)}
+                  style={{ padding:'10px 20px', borderRadius:9, border:`1px solid ${T.border}`, background:'transparent', cursor:'pointer', fontSize:13, color:T.textMid, fontFamily:'inherit' }}>
+                  Cancel
+                </button>
+                <button onClick={handleSave} disabled={saving}
+                  style={{ padding:'10px 24px', borderRadius:9, border:'none', background:`linear-gradient(135deg,${T.a1},${T.a2})`, color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:'inherit', opacity: saving ? .7 : 1 }}>
                   {saving ? 'Saving…' : modal === 'add' ? 'Add Product' : 'Save Changes'}
                 </button>
               </div>
