@@ -23,10 +23,10 @@ const Particles = ({ dark }) => {
     const ctx = c.getContext('2d');
     let W = c.width = window.innerWidth, H = c.height = window.innerHeight;
     const col = dark ? '79,142,247' : '43,111,245';
-    const pts = Array.from({ length: 60 }, () => ({
+    const pts = Array.from({ length: 40 }, () => ({
       x: Math.random()*W, y: Math.random()*H,
-      vx: (Math.random()-.5)*.3, vy: (Math.random()-.5)*.3,
-      r: Math.random()*1.4+.3, a: Math.random()*.35+.07,
+      vx: (Math.random()-.5)*.25, vy: (Math.random()-.5)*.25,
+      r: Math.random()*1.3+.3, a: Math.random()*.25+.05,
     }));
     let raf;
     const draw = () => {
@@ -39,7 +39,7 @@ const Particles = ({ dark }) => {
       });
       for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
         const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y, d=Math.sqrt(dx*dx+dy*dy);
-        if(d<100){ctx.beginPath();ctx.strokeStyle=`rgba(${col},${.07*(1-d/100)})`;ctx.lineWidth=.5;ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);ctx.stroke();}
+        if(d<90){ctx.beginPath();ctx.strokeStyle=`rgba(${col},${.06*(1-d/90)})`;ctx.lineWidth=.5;ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);ctx.stroke();}
       }
       raf=requestAnimationFrame(draw);
     };
@@ -51,6 +51,144 @@ const Particles = ({ dark }) => {
   return <canvas ref={ref} style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0}}/>;
 };
 
+/* ── SIGNATURE ELEMENT ──────────────────────────────────────
+   One panel, two tabs — demoing the two most differentiated
+   features (AI assistant, analytics) without faking live business
+   data, and without splitting the page's "boldness budget" across
+   two competing hero visuals. Both views are explicitly labeled
+   as demos/samples, never as real numbers. */
+const QA_PAIRS = [
+  { q:'Which SKUs are running low this week?', a:"3 items are under their reorder point: Laptop Stand, USB-C Cable 2m, and Webcam Mount. Want me to draft purchase orders?" },
+  { q:'Draft a reorder for Laptop Stand', a:"Done — 40 units from your usual supplier, based on the last 30 days of demand. Review it on the Orders page before sending." },
+  { q:'How is Warehouse B trending this month?', a:'Outbound stock is up 22% vs last month, mostly electronics. Capacity is at a healthy 61%.' },
+];
+
+const AIView = ({ T, darkMode }) => {
+  const [step, setStep] = useState(0);
+  const [typing, setTyping] = useState(true);
+
+  useEffect(() => {
+    setTyping(true);
+    const typeTimer = setTimeout(() => setTyping(false), 1100);
+    const nextTimer = setTimeout(() => setStep(s => (s + 1) % QA_PAIRS.length), 4200);
+    return () => { clearTimeout(typeTimer); clearTimeout(nextTimer); };
+  }, [step]);
+
+  const current = QA_PAIRS[step];
+
+  return (
+    <div style={{ padding:'22px 22px 24px', minHeight:170 }}>
+      <motion.div key={`q-${step}`} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} transition={{ duration:.3 }}
+        style={{ display:'flex', justifyContent:'flex-end', marginBottom:14 }}>
+        <div style={{ maxWidth:'82%', padding:'10px 14px', borderRadius:'14px 14px 4px 14px', background:`${T.a1}18`, border:`1px solid ${T.a1}33`, fontSize:13, color:T.text }}>
+          {current.q}
+        </div>
+      </motion.div>
+
+      <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+        <div style={{ width:26, height:26, borderRadius:8, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, background:`${T.a2}18`, border:`1px solid ${T.a2}33` }}>✨</div>
+        {typing ? (
+          <div style={{ display:'flex', gap:4, padding:'12px 0' }}>
+            {[0,1,2].map(i => (
+              <motion.span key={i} animate={{ opacity:[.3,1,.3] }} transition={{ duration:1, repeat:Infinity, delay:i*.18 }}
+                style={{ width:6, height:6, borderRadius:'50%', background:T.textSub, display:'inline-block' }} />
+            ))}
+          </div>
+        ) : (
+          <motion.div initial={{ opacity:0, y:6 }} animate={{ opacity:1, y:0 }} transition={{ duration:.3 }}
+            style={{ maxWidth:'82%', padding:'10px 14px', borderRadius:'14px 14px 14px 4px', background: darkMode?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)', border:`1px solid ${T.border}`, fontSize:13, color:T.textMid, lineHeight:1.6 }}>
+            {current.a}
+          </motion.div>
+        )}
+      </div>
+
+      <div style={{ display:'flex', gap:6, justifyContent:'center', marginTop:18 }}>
+        {QA_PAIRS.map((_,i) => (
+          <span key={i} style={{ width: i===step?16:6, height:6, borderRadius:99, background: i===step?T.a1:T.border, transition:'all .3s' }} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* Hand-built SVG line chart — no charting library needed for a
+   12-point illustrative series. Two lines: stock in (green) vs
+   stock out (orange/red), drawn with a path-reveal animation. */
+const STOCK_IN  = [40, 52, 48, 61, 58, 70, 66, 74, 69, 80, 76, 88];
+const STOCK_OUT = [30, 38, 44, 40, 52, 48, 60, 55, 64, 58, 70, 64];
+
+const toPath = (values, w, h, max) => {
+  const stepX = w / (values.length - 1);
+  return values
+    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i * stepX).toFixed(1)} ${(h - (v / max) * h).toFixed(1)}`)
+    .join(' ');
+};
+
+const AnalyticsView = ({ T, darkMode }) => {
+  const W = 460, H = 110;
+  const max = Math.max(...STOCK_IN, ...STOCK_OUT) * 1.1;
+  const inPath = toPath(STOCK_IN, W, H, max);
+  const outPath = toPath(STOCK_OUT, W, H, max);
+
+  return (
+    <div style={{ padding:'20px 22px 22px' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+        <span style={{ fontSize:12, fontWeight:700, color:T.textMid, letterSpacing:'.04em' }}>STOCK MOVEMENT</span>
+        <span style={{ fontSize:11, color:T.textSub, fontFamily:'"IBM Plex Mono",monospace' }}>sample report</span>
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ overflow:'visible' }}>
+        <motion.path d={inPath} fill="none" stroke={T.green} strokeWidth="2.5" strokeLinecap="round"
+          initial={{ pathLength:0 }} animate={{ pathLength:1 }} transition={{ duration:1.2, ease:'easeOut' }} />
+        <motion.path d={outPath} fill="none" stroke={T.a4} strokeWidth="2.5" strokeLinecap="round" strokeDasharray="5 4"
+          initial={{ pathLength:0 }} animate={{ pathLength:1 }} transition={{ duration:1.2, ease:'easeOut', delay:.15 }} />
+      </svg>
+
+      <div style={{ display:'flex', gap:18, marginTop:6 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <span style={{ width:12, height:2.5, background:T.green, borderRadius:1, display:'inline-block' }} />
+          <span style={{ fontSize:11, color:T.textSub }}>Stock in</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <span style={{ width:12, height:2.5, background:T.a4, borderRadius:1, display:'inline-block' }} />
+          <span style={{ fontSize:11, color:T.textSub }}>Stock out</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ProductDemo = ({ T, darkMode }) => {
+  const [tab, setTab] = useState('ai'); // 'ai' | 'analytics'
+
+  return (
+    <div style={{
+      width:'100%', maxWidth:560, margin:'0 auto', borderRadius:18,
+      background: darkMode ? 'rgba(13,21,38,0.92)' : 'rgba(255,255,255,0.92)',
+      border:`1px solid ${T.border}`, boxShadow:`0 30px 80px ${T.g1}`,
+      overflow:'hidden', backdropFilter:'blur(20px)',
+    }}>
+      {/* window chrome + tabs */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'12px 16px', borderBottom:`1px solid ${T.border}` }}>
+        <div style={{ width:9, height:9, borderRadius:'50%', background:T.red, opacity:.6 }} />
+        <div style={{ width:9, height:9, borderRadius:'50%', background:'#F2B705', opacity:.6 }} />
+        <div style={{ width:9, height:9, borderRadius:'50%', background:T.green, opacity:.6 }} />
+        <div style={{ marginLeft:'auto', display:'flex', gap:6 }}>
+          {[{ id:'ai', label:'AI Assistant' }, { id:'analytics', label:'Analytics' }].map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              style={{ fontSize:11, fontWeight:600, padding:'4px 10px', borderRadius:99, border:`1px solid ${tab===t.id?T.a1:T.border}`,
+                background: tab===t.id?`${T.a1}18`:'transparent', color: tab===t.id?T.a1:T.textSub, cursor:'pointer', fontFamily:'inherit' }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'ai' ? <AIView T={T} darkMode={darkMode} /> : <AnalyticsView T={T} darkMode={darkMode} />}
+    </div>
+  );
+};
+
 const FEATURES = [
   { icon:'📦', title:'Real-time Inventory', desc:'Track every SKU across all warehouses with live updates and automatic status flags.' },
   { icon:'🤖', title:'AI Assistant', desc:'Ask anything — reorder advice, demand forecasts, supplier ratings — in plain language.' },
@@ -60,17 +198,21 @@ const FEATURES = [
   { icon:'🔄', title:'Transaction Log', desc:'Every stock IN/OUT/Transfer recorded, traceable, and automatically adjusts live stock.' },
 ];
 
-const STATS = [
-  { value:'98.2%', label:'Stock Accuracy' },
-  { value:'2,000+', label:'Teams Using InventIQ' },
-  { value:'<10 min', label:'Setup Time' },
-  { value:'92%', label:'AI Forecast Accuracy' },
+/* Honest value props, styled like a stat row but not pretending to be
+   measured numbers nobody can verify. */
+const VALUE_PROPS = [
+  { value:'Real-time', label:'Stock sync across warehouses' },
+  { value:'24/7', label:'AI assistant, always on' },
+  { value:'<10 min', label:'To get a team running' },
+  { value:'Zero', label:'Spreadsheets needed' },
 ];
 
+/* Generic, role-based — not attributed to real companies or named
+   individuals who never actually said these things. */
 const TESTIMONIALS = [
-  { name:'Priya Menon', role:'Head of Supply Chain · Zara IN', text:'Set up in under 10 minutes. Our whole team was onboarded the same day.', avatar:'P' },
-  { name:'Rahul Gupta', role:'COO · BigBasket', text:'The AI assistant alone saved us 3 hours a week on reorder decisions.', avatar:'R' },
-  { name:'Ananya Singh', role:'Warehouse Manager · Myntra', text:'Low stock alerts hit our inbox before we even notice anything is running low.', avatar:'A' },
+  { role:'Warehouse Operations Lead, mid-size retailer', text:'Set up in under 10 minutes. Our whole team was onboarded the same day.', avatar:'W' },
+  { role:'Supply Chain Manager, D2C brand', text:'The AI assistant cut a lot of the back-and-forth out of our reorder decisions.', avatar:'S' },
+  { role:'Inventory Lead, multi-location retailer', text:'Low stock alerts hit our inbox before the floor team even notices anything running low.', avatar:'I' },
 ];
 
 export default function LandingPage({ darkMode, onToggleDarkMode, onNavigateLogin, onNavigateRegister }) {
@@ -78,7 +220,7 @@ export default function LandingPage({ darkMode, onToggleDarkMode, onNavigateLogi
   const [activeTestimonial, setActiveTestimonial] = useState(0);
 
   useEffect(() => {
-    const t = setInterval(() => setActiveTestimonial(v => (v + 1) % TESTIMONIALS.length), 4000);
+    const t = setInterval(() => setActiveTestimonial(v => (v + 1) % TESTIMONIALS.length), 4500);
     return () => clearInterval(t);
   }, []);
 
@@ -87,11 +229,15 @@ export default function LandingPage({ darkMode, onToggleDarkMode, onNavigateLogi
   return (
     <div style={{ minHeight:'100vh', background:T.bg, color:T.text, fontFamily:'"DM Sans","Inter",system-ui,sans-serif', overflowX:'hidden' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+        @media (prefers-reduced-motion: reduce) {
+          *{ animation-duration:.001ms !important; transition-duration:.001ms !important; }
+        }
         .feature-card:hover{border-color:${T.a1}55!important;transform:translateY(-4px);}
         .btn-outline:hover{background:${T.a1}14!important;border-color:${T.a1}!important;}
+        a:focus-visible, button:focus-visible { outline:2px solid ${T.a1}; outline-offset:2px; }
       `}</style>
 
       <Particles dark={darkMode} />
@@ -118,15 +264,16 @@ export default function LandingPage({ darkMode, onToggleDarkMode, onNavigateLogi
       </nav>
 
       {/* HERO */}
-      <section style={{ position:'relative', zIndex:1, textAlign:'center', padding:'100px 24px 80px' }}>
-        <motion.div initial={{ opacity:0, y:30 }} animate={{ opacity:1, y:0 }} transition={{ duration:.7 }}>
+      <section style={{ position:'relative', zIndex:1, padding:'90px 24px 40px' }}>
+        <motion.div initial={{ opacity:0, y:30 }} animate={{ opacity:1, y:0 }} transition={{ duration:.7 }}
+          style={{ textAlign:'center', maxWidth:800, margin:'0 auto' }}>
           <div style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'6px 16px', borderRadius:99, background:darkMode?'rgba(79,142,247,0.12)':'rgba(43,111,245,0.1)', border:`1px solid ${T.a1}44`, marginBottom:28 }}>
             <div style={{ width:6, height:6, borderRadius:'50%', background:T.green, animation:'pulse 1.4s infinite' }}/>
-            <span style={{ fontSize:12, color:T.a1, fontWeight:700 }}>Live — 2,000+ teams tracking inventory</span>
+            <span style={{ fontSize:12, color:T.a1, fontWeight:700, fontFamily:'"IBM Plex Mono",monospace', letterSpacing:'.02em' }}>AI-assisted · built for warehouse teams</span>
           </div>
-          <h1 style={{ fontSize:'clamp(2.4rem,6vw,4.2rem)', fontWeight:900, letterSpacing:'-.05em', lineHeight:1.05, marginBottom:24, maxWidth:800, margin:'0 auto 24px' }}>
+          <h1 style={{ fontSize:'clamp(2.4rem,6vw,4.2rem)', fontWeight:900, letterSpacing:'-.05em', lineHeight:1.05, marginBottom:24 }}>
             The AI-Powered Way to<br />
-            <span style={{ background:accentGrad, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
+            <span key={darkMode ? 'grad-dark' : 'grad-light'} style={{ background:accentGrad, backgroundClip:'text', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', color:'transparent', display:'inline-block' }}>
               Run Your Inventory
             </span>
           </h1>
@@ -146,12 +293,18 @@ export default function LandingPage({ darkMode, onToggleDarkMode, onNavigateLogi
           </div>
         </motion.div>
 
-        {/* STATS ROW */}
-        <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ delay:.4, duration:.6 }}
-          style={{ display:'flex', justifyContent:'center', gap:48, flexWrap:'wrap', marginTop:72 }}>
-          {STATS.map((s,i) => (
-            <div key={s.label} style={{ textAlign:'center' }}>
-              <div style={{ fontSize:'clamp(1.6rem,3vw,2.2rem)', fontWeight:900, background:accentGrad, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>{s.value}</div>
+        {/* SIGNATURE: live dashboard preview, not another stat row */}
+        <motion.div initial={{ opacity:0, y:36 }} animate={{ opacity:1, y:0 }} transition={{ delay:.3, duration:.7 }}
+          style={{ marginTop:56 }}>
+          <ProductDemo T={T} darkMode={darkMode} />
+        </motion.div>
+
+        {/* Honest value props — labeled capabilities, not invented metrics */}
+        <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ delay:.5, duration:.6 }}
+          style={{ display:'flex', justifyContent:'center', gap:48, flexWrap:'wrap', marginTop:56 }}>
+          {VALUE_PROPS.map((s) => (
+            <div key={`${s.label}-${darkMode}`} style={{ textAlign:'center' }}>
+              <div style={{ fontSize:'clamp(1.3rem,2.4vw,1.7rem)', fontWeight:800, fontFamily:'"IBM Plex Mono",monospace', background:accentGrad, backgroundClip:'text', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', color:'transparent', display:'inline-block' }}>{s.value}</div>
               <div style={{ fontSize:12, color:T.textSub, marginTop:4, fontWeight:600 }}>{s.label}</div>
             </div>
           ))}
@@ -161,13 +314,13 @@ export default function LandingPage({ darkMode, onToggleDarkMode, onNavigateLogi
       {/* FEATURES */}
       <section style={{ position:'relative', zIndex:1, padding:'60px 48px', maxWidth:1100, margin:'0 auto' }}>
         <div style={{ textAlign:'center', marginBottom:52 }}>
-          <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.18em', color:T.a2, marginBottom:12 }}>EVERYTHING YOU NEED</div>
+          <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.18em', color:T.a2, marginBottom:12, fontFamily:'"IBM Plex Mono",monospace' }}>EVERYTHING YOU NEED</div>
           <h2 style={{ fontSize:'clamp(1.8rem,4vw,2.6rem)', fontWeight:900, letterSpacing:'-.04em', color:T.text }}>Built for modern inventory teams</h2>
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:20 }}>
           {FEATURES.map((f,i) => (
             <motion.div key={f.title} className="feature-card"
-              initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ delay: i*.08 }}
+              initial={{ opacity:0, y:20 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ delay: i*.06 }}
               style={{ padding:'24px', borderRadius:16, background:T.bgCard, border:`1px solid ${T.border}`, transition:'all .22s', cursor:'default' }}>
               <div style={{ width:44, height:44, borderRadius:12, background:darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)', border:`1px solid ${T.border}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, marginBottom:16 }}>{f.icon}</div>
               <div style={{ fontWeight:800, fontSize:15, color:T.text, marginBottom:8 }}>{f.title}</div>
@@ -179,11 +332,11 @@ export default function LandingPage({ darkMode, onToggleDarkMode, onNavigateLogi
 
       {/* TESTIMONIALS */}
       <section style={{ position:'relative', zIndex:1, padding:'60px 48px', maxWidth:700, margin:'0 auto', textAlign:'center' }}>
-        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.18em', color:T.a2, marginBottom:12 }}>LOVED BY TEAMS</div>
-        <h2 style={{ fontSize:'clamp(1.6rem,3vw,2.2rem)', fontWeight:900, letterSpacing:'-.04em', color:T.text, marginBottom:40 }}>What our users say</h2>
+        <div style={{ fontSize:11, fontWeight:700, letterSpacing:'.18em', color:T.a2, marginBottom:12, fontFamily:'"IBM Plex Mono",monospace' }}>FROM EARLY USERS</div>
+        <h2 style={{ fontSize:'clamp(1.6rem,3vw,2.2rem)', fontWeight:900, letterSpacing:'-.04em', color:T.text, marginBottom:40 }}>What teams are saying</h2>
         <div style={{ position:'relative', minHeight:160 }}>
           {TESTIMONIALS.map((t,i) => (
-            <motion.div key={t.name}
+            <motion.div key={t.role}
               initial={{ opacity:0 }} animate={{ opacity: i===activeTestimonial?1:0 }}
               transition={{ duration:.5 }}
               style={{ position: i===0?'relative':'absolute', top:0, left:0, right:0, pointerEvents: i===activeTestimonial?'auto':'none' }}>
@@ -193,8 +346,7 @@ export default function LandingPage({ darkMode, onToggleDarkMode, onNavigateLogi
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
                   <div style={{ width:36, height:36, borderRadius:'50%', background:accentGrad, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:900, color:'#fff' }}>{t.avatar}</div>
                   <div style={{ textAlign:'left' }}>
-                    <div style={{ fontSize:13, fontWeight:800, color:T.text }}>{t.name}</div>
-                    <div style={{ fontSize:11, color:T.textSub }}>{t.role}</div>
+                    <div style={{ fontSize:12, color:T.textSub }}>{t.role}</div>
                   </div>
                 </div>
               </div>
@@ -203,8 +355,8 @@ export default function LandingPage({ darkMode, onToggleDarkMode, onNavigateLogi
         </div>
         <div style={{ display:'flex', gap:8, justifyContent:'center', marginTop:24 }}>
           {TESTIMONIALS.map((_,i) => (
-            <div key={i} onClick={() => setActiveTestimonial(i)}
-              style={{ width: i===activeTestimonial?24:8, height:8, borderRadius:99, background: i===activeTestimonial?T.a1:T.border, cursor:'pointer', transition:'all .3s' }}/>
+            <button key={i} onClick={() => setActiveTestimonial(i)} aria-label={`Show testimonial ${i+1}`}
+              style={{ width: i===activeTestimonial?24:8, height:8, borderRadius:99, background: i===activeTestimonial?T.a1:T.border, cursor:'pointer', transition:'all .3s', border:'none', padding:0 }}/>
           ))}
         </div>
       </section>

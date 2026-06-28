@@ -16,6 +16,12 @@ class Product(Base):
     price = Column(Float, default=0)
     warehouse = Column(String)
 
+    warehouse_id = Column(
+        Integer,
+        ForeignKey("warehouses.id"),
+        nullable=True
+    )
+    
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)
     supplier = relationship("Supplier", back_populates="products")
 
