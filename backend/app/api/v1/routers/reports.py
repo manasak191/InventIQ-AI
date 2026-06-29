@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
 from datetime import datetime
 
 from app.db.database import get_db
@@ -19,29 +18,110 @@ def report_summary(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    products = db.query(Product).all()
-    txns = db.query(Transaction).all()
-    orders = db.query(Order).all()
+    products  = db.query(Product).all()
+    txns      = db.query(Transaction).all()
+    orders    = db.query(Order).all()
+    suppliers = db.query(Supplier).all()
 
+    total_products    = len(products)
     total_stock_value = sum(p.stock * p.price for p in products)
+
+    # Stockout = products with stock exactly 0
     stockout_events = len([p for p in products if p.stock == 0])
     low_stock_count = len([p for p in products if p.stock <= p.reorder_point])
 
-    total_in = sum(t.value for t in txns if t.type == "IN")
-    total_out = sum(t.value for t in txns if t.type == "OUT")
+    # ── Stock Accuracy ─────────────────────────────────────────
+    # ONLY calculate if products exist. If no products → None (not 97.8%)
+    if total_products > 0:
+        healthy = len([p for p in products if p.stock > p.reorder_point])
+        stock_accuracy = round((healthy / total_products) * 100, 1)
+    else:
+        stock_accuracy = None   # explicitly None — frontend shows N/A
+
+    # ── Revenue & Cost ─────────────────────────────────────────
+    total_out_value = sum(t.value for t in txns if t.type == "OUT")
+    total_in_value  = sum(t.value for t in txns if t.type == "IN")
+
+    # ── Gross Margin ───────────────────────────────────────────
+    # ONLY calculate when we have actual OUT transactions with value > 0.
+    # If no transactions → None (not 32.4%)
+    if total_out_value > 0 and total_in_value > 0:
+        gross_margin = round(
+            ((total_out_value - total_in_value) / total_out_value) * 100, 1
+        )
+    else:
+        gross_margin = None   # explicitly None → frontend shows N/A
+
+    # ── Inventory Turnover ─────────────────────────────────────
+    if total_stock_value > 0 and total_out_value > 0:
+        inventory_turnover = round(
+            (total_out_value / total_stock_value) * 12, 2
+        )
+    else:
+        inventory_turnover = None
+
+    # ── On-Time Delivery ───────────────────────────────────────
+    suppliers_with_data = [
+        s for s in suppliers if s.on_time_percent and s.on_time_percent > 0
+    ]
+    if suppliers_with_data:
+        on_time_delivery = round(
+            sum(s.on_time_percent for s in suppliers_with_data) / len(suppliers_with_data), 1
+        )
+    else:
+        on_time_delivery = None
+
+    # ── Orders ─────────────────────────────────────────────────
+    total_orders_value = sum(o.total_value for o in orders)
+    avg_order_value    = (total_orders_value / len(orders)) if orders else None
+
+    # ── Top Categories ─────────────────────────────────────────
+    cat_map = {}
+    for p in products:
+        c = p.category or "Uncategorized"
+        cat_map.setdefault(c, {"stock_value": 0.0, "product_count": 0, "total_stock": 0})
+        cat_map[c]["stock_value"]   += p.stock * p.price
+        cat_map[c]["product_count"] += 1
+        cat_map[c]["total_stock"]   += p.stock
+    top_categories = sorted(
+        [{"name": k, **v} for k, v in cat_map.items()],
+        key=lambda x: x["stock_value"], reverse=True
+    )[:6]
+
+    # ── Transaction counts ─────────────────────────────────────
+    txn_in  = len([t for t in txns if t.type == "IN"])
+    txn_out = len([t for t in txns if t.type == "OUT"])
+    txn_trf = len([t for t in txns if t.type == "TRF"])
 
     return {
-        "stock_accuracy": 97.8,  # placeholder until cycle-count data exists
-        "total_orders_ytd": f"₹{round(sum(o.total_value for o in orders)/100000, 1)}L" if orders else "₹0",
-        "stockout_events": stockout_events,
-        "low_stock_count": low_stock_count,
-        "on_time_delivery": round(
-            sum(s.on_time_percent for s in db.query(Supplier).all()) / max(len(db.query(Supplier).all()), 1), 1
-        ),
-        "inventory_turnover": round(total_out / max(total_stock_value, 1) * 12, 2) if total_stock_value else 0,
-        "avg_order_value": f"₹{round(sum(o.total_value for o in orders)/max(len(orders),1)/1000,1)}K" if orders else "₹0",
-        "gross_margin": 32.4,  # placeholder until cost-price tracking exists
-        "total_revenue": f"₹{round(total_out/100000, 1)}L",
+        # ── All values are genuinely computed — no hardcoded fallbacks ──
+        "total_products":       total_products,
+        "total_stock_value":    total_stock_value,
+        "stockout_events":      stockout_events,
+        "low_stock_count":      low_stock_count,
+
+        # These are None when there's no data — NOT 97.8 / 32.4
+        "stock_accuracy":       stock_accuracy,
+        "gross_margin":         gross_margin,
+        "inventory_turnover":   inventory_turnover,
+        "on_time_delivery":     on_time_delivery,
+
+        "total_revenue":        total_out_value,
+        "total_in_value":       total_in_value,
+        "total_orders":         len(orders),
+        "total_orders_value":   total_orders_value,
+        "avg_order_value":      avg_order_value,
+        "txn_count_in":         txn_in,
+        "txn_count_out":        txn_out,
+        "txn_count_trf":        txn_trf,
+        "total_transactions":   len(txns),
+        "top_categories":       top_categories,
+
+        # Flags so frontend knows what data exists
+        "has_products":     total_products > 0,
+        "has_transactions": len(txns) > 0,
+        "has_orders":       len(orders) > 0,
+        "has_suppliers":    len(suppliers) > 0,
     }
 
 
@@ -52,20 +132,36 @@ def report_inventory(
     current_user=Depends(get_current_user),
 ):
     txns = db.query(Transaction).all()
-    now = datetime.utcnow()
+    now  = datetime.utcnow()
 
-    monthly_in = [0] * 12
+    if period == "yearly":
+        txns = [t for t in txns if t.created_at and t.created_at.year == now.year]
+    elif period == "quarterly":
+        qsm  = ((now.month - 1) // 3) * 3 + 1
+        txns = [t for t in txns if t.created_at and t.created_at.year == now.year and t.created_at.month >= qsm]
+    else:
+        txns = [t for t in txns if t.created_at and t.created_at.year == now.year]
+
+    monthly_in  = [0] * 12
     monthly_out = [0] * 12
+    monthly_trf = [0] * 12
     for t in txns:
         if not t.created_at:
             continue
         m = t.created_at.month - 1
         if t.type == "IN":
-            monthly_in[m] += t.qty
+            monthly_in[m]  += t.qty
         elif t.type == "OUT":
             monthly_out[m] += t.qty
+        elif t.type == "TRF":
+            monthly_trf[m] += t.qty
 
-    return {"stock_in": monthly_in, "stock_out": monthly_out}
+    return {
+        "stock_in":       monthly_in,
+        "stock_out":      monthly_out,
+        "stock_transfer": monthly_trf,
+        "has_data":       any(v > 0 for v in monthly_in + monthly_out),
+    }
 
 
 @router.get("/revenue")
@@ -74,21 +170,35 @@ def report_revenue(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    txns = db.query(Transaction).filter(Transaction.type == "OUT").all()
-    orders = db.query(Order).all()
+    now      = datetime.utcnow()
+    out_txns = db.query(Transaction).filter(Transaction.type == "OUT").all()
+    orders   = db.query(Order).all()
 
-    monthly_rev = [0] * 12
-    monthly_orders = [0] * 12
-    for t in txns:
-        if not t.created_at:
-            continue
-        monthly_rev[t.created_at.month - 1] += t.value / 100000  # in lakhs
+    if period == "yearly":
+        out_txns = [t for t in out_txns if t.created_at and t.created_at.year == now.year]
+        orders   = [o for o in orders   if o.created_at and o.created_at.year == now.year]
+    elif period == "quarterly":
+        qsm      = ((now.month - 1) // 3) * 3 + 1
+        out_txns = [t for t in out_txns if t.created_at and t.created_at.year == now.year and t.created_at.month >= qsm]
+        orders   = [o for o in orders   if o.created_at and o.created_at.year == now.year and o.created_at.month >= qsm]
+    else:
+        out_txns = [t for t in out_txns if t.created_at and t.created_at.year == now.year]
+        orders   = [o for o in orders   if o.created_at and o.created_at.year == now.year]
+
+    monthly_rev    = [0.0] * 12
+    monthly_orders = [0]   * 12
+    for t in out_txns:
+        if t.created_at:
+            monthly_rev[t.created_at.month - 1] += t.value / 100000
     for o in orders:
-        if not o.created_at:
-            continue
-        monthly_orders[o.created_at.month - 1] += 1
+        if o.created_at:
+            monthly_orders[o.created_at.month - 1] += 1
 
-    return {"monthly": [round(v, 1) for v in monthly_rev], "orders": monthly_orders}
+    return {
+        "monthly":  [round(v, 2) for v in monthly_rev],
+        "orders":   monthly_orders,
+        "has_data": any(v > 0 for v in monthly_rev),
+    }
 
 
 @router.get("/suppliers")
@@ -97,13 +207,18 @@ def report_suppliers(
     current_user=Depends(get_current_user),
 ):
     suppliers = db.query(Supplier).order_by(Supplier.rating.desc()).all()
-    return [
-        {
-            "name": s.name,
-            "rating": s.rating,
-            "on_time_percent": s.on_time_percent,
-            "orders": s.orders,
-            "total_value": s.total_value,
-        }
-        for s in suppliers
-    ]
+    return {
+        "suppliers": [
+            {
+                "name":            s.name,
+                "category":        s.category,
+                "rating":          s.rating,
+                "on_time_percent": s.on_time_percent,
+                "orders":          s.orders,
+                "total_value":     s.total_value,
+                "status":          s.status,
+            }
+            for s in suppliers
+        ],
+        "has_data": len(suppliers) > 0,
+    }
