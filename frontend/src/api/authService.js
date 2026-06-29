@@ -70,6 +70,18 @@ async function forgotPassword(email) {
   }
 }
 
+async function changePassword(oldPassword, newPassword) {
+  try {
+    const { data } = await api.post('/auth/change-password', {
+  old_password: form.current,
+  new_password: form.newPw
+});
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: extractError(err).message };
+  }
+}
+
 // Matches backend: POST /auth/reset-password  { token, new_password }
 async function resetPassword(token, newPassword) {
   try {
@@ -95,6 +107,6 @@ function isAuthenticated() {
 const authService = {
   register, login, verifyOtp, resendOtp,
   forgotPassword, resetPassword, logout,
-  getCurrentUser, isAuthenticated,
+  getCurrentUser, isAuthenticated,changePassword,
 };
 export default authService;

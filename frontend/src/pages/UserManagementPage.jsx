@@ -23,7 +23,7 @@ export default function UserManagementPage({ T, darkMode }) {
     if (err) { setError(err); setLoading(false); return; }
     const all = Array.isArray(data) ? data : [];
     // Exclude the currently logged-in admin from the list
-    setUsers(all.filter(u => u.id !== currentUser?.id));
+    setUsers(all);
     setLoading(false);
   };
 
@@ -38,7 +38,7 @@ export default function UserManagementPage({ T, darkMode }) {
       filter === 'all'      ? true :
       filter === 'active'   ? u.is_active :
       filter === 'suspended'? !u.is_active :
-      u.role === filter;
+      u.role?.toLowerCase() === filter;
     return matchSearch && matchFilter;
   });
 
@@ -159,10 +159,59 @@ export default function UserManagementPage({ T, darkMode }) {
                     {u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
                   </td>
                   <td style={{ padding: '13px 14px' }}>
-                    {u.is_active
-                      ? <button onClick={() => handleSuspend(u.id)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 7, border: `1px solid ${T.red}44`, background: `${T.red}0E`, cursor: 'pointer', color: T.red, fontFamily: 'inherit', fontWeight: 600 }}>Suspend</button>
-                      : <button onClick={() => handleRestore(u.id)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 7, border: `1px solid ${T.green}44`, background: `${T.green}0E`, cursor: 'pointer', color: T.green, fontFamily: 'inherit', fontWeight: 600 }}>Restore</button>
-                    }
+                    {u.id === currentUser?.id ? (
+                      <button
+                        disabled
+                        style={{
+                          fontSize: 11,
+                          padding: '5px 12px',
+                          borderRadius: 7,
+                          border: `1px solid ${T.border}`,
+                          background: `${T.border}22`,
+                          cursor: 'not-allowed',
+                          color: T.a2,
+                          fontFamily: 'inherit',
+                          fontWeight: 600,
+                          
+                        }}
+                      >
+                        Current User
+                      </button>
+                    ) : u.is_active ? (
+                      <button
+                        onClick={() => handleSuspend(u.id)}
+                        style={{
+                          fontSize: 11,
+                          padding: '5px 12px',
+                          borderRadius: 7,
+                          border: `1px solid ${T.red}44`,
+                          background: `${T.red}0E`,
+                          cursor: 'pointer',
+                          color: T.red,
+                          fontFamily: 'inherit',
+                          fontWeight: 600
+                        }}
+                      >
+                        Suspend
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleRestore(u.id)}
+                        style={{
+                          fontSize: 11,
+                          padding: '5px 12px',
+                          borderRadius: 7,
+                          border: `1px solid ${T.green}44`,
+                          background: `${T.green}0E`,
+                          cursor: 'pointer',
+                          color: T.green,
+                          fontFamily: 'inherit',
+                          fontWeight: 600
+                        }}
+                      >
+                        Restore
+                      </button>
+                    )}
                   </td>
                 </motion.tr>
               ))}

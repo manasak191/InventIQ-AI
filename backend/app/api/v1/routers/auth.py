@@ -15,6 +15,9 @@ import secrets
 from app.api.v1.schemas.user_schema import ForgotPassword
 from app.services.email_service import send_reset_email
 
+from app.api.v1.schemas.user_schema import ChangePassword
+from app.core.deps import get_current_user
+
 from app.api.v1.schemas.user_schema import (
     UserRegister,
     OTPVerify
@@ -251,3 +254,42 @@ def reset_password(
     db.commit()
 
     return {"message": "Password reset successful"}
+
+
+@router.post("/change-password")
+def change_password(
+    data: ChangePassword,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Get logged-in user
+    user = db.query(User).filter(User.id == current_user.id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # Verify current password
+    if not verify_password(data.old_password, user.password_hash):
+        raise HTTPException(
+            status_code=400,
+            detail="Current password is incorrect"
+        )
+
+    # Prevent using the same password
+    if verify_password(data.new_password, user.password_hash):
+        raise HTTPException(
+            status_code=400,
+            detail="New password cannot be the same as the current password"
+        )
+
+    # Update password
+    user.password_hash = hash_password(data.new_password)
+
+    db.commit()
+
+    return {
+        "message": "Password changed successfully"
+    }

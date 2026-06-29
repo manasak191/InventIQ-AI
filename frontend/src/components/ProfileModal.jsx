@@ -168,12 +168,17 @@ export function ChangePasswordModal({ T, darkMode, onClose }) {
 
     setSaving(true);
     try {
-      await api.post('/auth/change-password', { current_password: form.current, new_password: form.newPw });
+      await api.post('/auth/change-password', {
+        old_password: form.current,
+        new_password: form.newPw,
+      });
+
       toast.success('Password changed successfully!');
       onClose();
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Failed to change password. Check your current password.');
     }
+
     setSaving(false);
   };
 

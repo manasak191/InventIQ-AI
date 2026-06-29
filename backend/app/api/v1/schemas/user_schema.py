@@ -50,3 +50,7 @@ class ResetPassword(BaseModel):
 
 class ForgotPassword(BaseModel):
     email: EmailStr
+    
+class ChangePassword(BaseModel):
+    old_password: str
+    new_password: str

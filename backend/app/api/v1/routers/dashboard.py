@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 from app.db.database import get_db
 from app.db.models.product import Product
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 
 def get_today():
-    return datetime.utcnow().date()
+    return datetime.now(timezone.utc).date()
 
 
 # ── ADMIN KPIs ────────────────────────────────────────────────
@@ -31,14 +31,17 @@ def admin_kpis(
     txns       = db.query(Transaction).all()
 
     # Exclude the currently logged-in admin from user counts
-    all_users    = db.query(User).filter(User.id != current_user.id).all()
-    total_users  = len(all_users)
+    # Count all users, including the logged-in admin
+    all_users = db.query(User).all()
+
+    total_users = len(all_users)
     active_users = len([u for u in all_users if u.is_active])
+    admin_users = len([u for u in all_users if u.role.lower() == "admin"])
 
     total_stock_value = sum(p.stock * p.price for p in products)
 
     # Revenue this month = OUT transaction values this month
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     revenue_this_month = sum(
         t.value for t in txns
         if t.type == "OUT"
@@ -129,7 +132,7 @@ def user_kpis(
     today_out = sum(t.qty for t in all_txns if t.type == "OUT" and t.created_at and t.created_at.date() == today)
 
     # This week — my transactions
-    week_start   = datetime.utcnow() - timedelta(days=7)
+    week_start = datetime.now(timezone.utc) - timedelta(days=7)
     my_week_txns = [t for t in my_txns if t.created_at and t.created_at >= week_start]
 
     # Low stock items for alerts
