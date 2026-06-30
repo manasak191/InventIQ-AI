@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.routers import (
     auth, products, suppliers, transactions,
     notifications, orders, reports, dashboard,
-    users, ai, forgot_password, warehouse, messages
+    users, ai, forgot_password, warehouse, messages, history
 )
 from app.db.database import create_tables
 
@@ -35,6 +35,7 @@ app.include_router(users.router)
 app.include_router(ai.router)
 app.include_router(warehouse.router)
 app.include_router(messages.router)
+app.include_router(history.router)
 
 @app.get("/")
 def root():

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { transactionService, inventoryService } from '../api/inventoryService';
+import { transactionService, inventoryService, transactionAdminService } from '../api/inventoryService';
 
 const EMPTY_FORM = { type:'IN', sku:'', product:'', qty:'', value:'', warehouse:'', note:'' };
 
@@ -11,6 +11,7 @@ export default function TransactionsPage({ T, darkMode, isAdmin = false }) {
   const [filter, setFilter]   = useState('all');
   const [search, setSearch]   = useState('');
   const [modal, setModal]     = useState(false);
+  const [editId, setEditId]   = useState(null);
   const [form, setForm]       = useState(EMPTY_FORM);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState(null);
@@ -95,21 +96,43 @@ export default function TransactionsPage({ T, darkMode, isAdmin = false }) {
   const totalIn  = txns.filter(t=>t.type==='IN').reduce((a,t) => a+(t.value||0), 0);
   const totalOut = txns.filter(t=>t.type==='OUT').reduce((a,t) => a+(t.value||0), 0);
 
-  const openModal = () => { setForm(EMPTY_FORM); setSkuLookup(''); setSkuResults([]); setModal(true); };
+  const openModal = () => { setForm(EMPTY_FORM); setSkuLookup(''); setSkuResults([]); setEditId(null); setModal(true); };
+
+  // Admin only — open modal pre-filled with existing transaction
+  const openEditTxn = (t) => {
+    setForm({
+      type: t.type, sku: t.sku, product: t.product,
+      qty: String(t.qty), value: String(t.value),
+      warehouse: t.warehouse || '', note: t.note || '',
+    });
+    setSkuLookup(t.sku);
+    setSkuResults([]);
+    setEditId(t.id);
+    setModal(true);
+  };
+
+  // Admin only — delete a transaction (reverts stock automatically on backend)
+  const handleDeleteTxn = async (id) => {
+    if (!window.confirm('Delete this transaction? Stock levels will be reverted.')) return;
+    const { error: err } = await transactionAdminService.delete(id);
+    if (err) { showToast(err, 'error'); return; }
+    showToast('Transaction deleted!'); load();
+  };
 
   const handleAdd = async () => {
     if (!form.sku)  { showToast('SKU is required', 'error'); return; }
     if (!form.qty)  { showToast('Quantity is required', 'error'); return; }
     setSaving(true);
     const { _price, ...payload } = form;   // strip internal _price field
-    const { error:err } = await transactionService.create({
-      ...payload,
-      qty:   Number(form.qty),
-      value: Number(form.value) || 0,
-    });
+    const finalPayload = { ...payload, qty: Number(form.qty), value: Number(form.value) || 0 };
+
+    const { error: err } = editId
+      ? await transactionAdminService.update(editId, finalPayload)
+      : await transactionService.create(finalPayload);
+
     if (err) { showToast(err, 'error'); setSaving(false); return; }
-    showToast('Transaction recorded!');
-    setSaving(false); setModal(false); setForm(EMPTY_FORM); setSkuLookup(''); load();
+    showToast(editId ? 'Transaction updated!' : 'Transaction recorded!');
+    setSaving(false); setModal(false); setForm(EMPTY_FORM); setSkuLookup(''); setEditId(null); load();
   };
 
   // Input style helper
@@ -196,7 +219,7 @@ export default function TransactionsPage({ T, darkMode, isAdmin = false }) {
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
               <tr style={{ borderBottom:`1px solid ${T.border}` }}>
-                {['Type','SKU','Product','Qty','Value (₹)','Warehouse','User','Date','Note'].map(h => (
+                {['Type','SKU','Product','Qty','Value (₹)','Warehouse','User','Date','Note', ...(isAdmin ? ['Actions'] : [])].map(h => (
                   <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:T.textSub, letterSpacing:'.05em', textTransform:'uppercase' }}>{h}</th>
                 ))}
               </tr>
@@ -218,10 +241,24 @@ export default function TransactionsPage({ T, darkMode, isAdmin = false }) {
                   <td style={{ padding:'12px 12px', fontSize:12, color:T.textMid }}>{t.user}</td>
                   <td style={{ padding:'12px 12px', fontSize:12, color:T.textSub }}>{t.date}</td>
                   <td style={{ padding:'12px 12px', fontSize:12, color:T.textSub }}>{t.note}</td>
+                  {isAdmin && (
+                    <td style={{ padding:'12px 12px' }}>
+                      <div style={{ display:'flex', gap:6 }}>
+                        <button onClick={() => openEditTxn(t)}
+                          style={{ fontSize:11, padding:'4px 10px', borderRadius:6, border:`1px solid ${T.border}`, background:'transparent', cursor:'pointer', color:T.textMid, fontFamily:'inherit' }}>
+                          Edit
+                        </button>
+                        <button onClick={() => handleDeleteTxn(t.id)}
+                          style={{ fontSize:11, padding:'4px 10px', borderRadius:6, border:`1px solid ${T.red}44`, background:`${T.red}0E`, cursor:'pointer', color:T.red, fontFamily:'inherit' }}>
+                          Del
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </motion.tr>
               ))}
               {filtered.length===0 && !loading && (
-                <tr><td colSpan={9} style={{ textAlign:'center', padding:40, color:T.textSub }}>
+                <tr><td colSpan={isAdmin ? 10 : 9} style={{ textAlign:'center', padding:40, color:T.textSub }}>
                   No transactions yet. Click "+ Log Transaction" to record your first movement.
                 </td></tr>
               )}
@@ -235,12 +272,12 @@ export default function TransactionsPage({ T, darkMode, isAdmin = false }) {
         {modal && (
           <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
             style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.65)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center' }}
-            onClick={() => setModal(false)}>
+            onClick={() => { setModal(false); setEditId(null); }}>
             <motion.div initial={{ scale:.93, opacity:0 }} animate={{ scale:1, opacity:1 }} exit={{ scale:.93, opacity:0 }}
               onClick={e=>e.stopPropagation()}
               style={{ background:T.bgCard, borderRadius:18, padding:32, width:540, boxShadow:'0 24px 64px rgba(0,0,0,.55)', border:`1px solid ${T.border}`, maxHeight:'90vh', overflowY:'auto' }}>
 
-              <div style={{ fontWeight:900, fontSize:18, color:T.text, marginBottom:6 }}>+ Log Transaction</div>
+              <div style={{ fontWeight:900, fontSize:18, color:T.text, marginBottom:6 }}>{editId ? '✏️ Edit Transaction' : '+ Log Transaction'}</div>
               <div style={{ fontSize:12, color:T.textSub, marginBottom:24 }}>Type a SKU or product name to auto-fill details from the database.</div>
 
               {/* Transaction type */}
@@ -359,13 +396,13 @@ export default function TransactionsPage({ T, darkMode, isAdmin = false }) {
 
               {/* Footer */}
               <div style={{ display:'flex', gap:10, justifyContent:'flex-end', paddingTop:4 }}>
-                <button onClick={()=>setModal(false)}
+                <button onClick={() => { setModal(false); setEditId(null); }}
                   style={{ padding:'11px 22px', borderRadius:10, border:`1px solid ${T.border}`, background:'transparent', cursor:'pointer', fontSize:13, color:T.textMid, fontFamily:'inherit' }}>
                   Cancel
                 </button>
                 <button onClick={handleAdd} disabled={saving || !form.sku || !form.qty}
                   style={{ padding:'11px 28px', borderRadius:10, border:'none', background: (saving||!form.sku||!form.qty)?T.border:`linear-gradient(135deg,${T.a1},${T.a3})`, color: (saving||!form.sku||!form.qty)?T.textSub:'#fff', fontWeight:700, fontSize:13, cursor:(saving||!form.sku||!form.qty)?'not-allowed':'pointer', fontFamily:'inherit', opacity: saving?.7:1 }}>
-                  {saving ? 'Saving…' : 'Log Transaction ✓'}
+                  {saving ? 'Saving…' : editId ? 'Save Changes ✓' : 'Log Transaction ✓'}
                 </button>
               </div>
             </motion.div>

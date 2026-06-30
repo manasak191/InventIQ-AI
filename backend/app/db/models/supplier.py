@@ -12,9 +12,9 @@ class Supplier(Base):
     category = Column(String)
     email = Column(String)
     phone = Column(String)
-    rating = Column(Float, default=0)
+    
     orders = Column(Integer, default=0)
-    on_time_percent = Column(Float, default=0)
+    
     total_value = Column(Float, default=0)
     status = Column(String, default="active")  # active | preferred | review
 

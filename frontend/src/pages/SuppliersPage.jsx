@@ -36,7 +36,7 @@ export default function SuppliersPage({ T, darkMode }) {
 
   const openAdd  = () => { setForm(EMPTY_FORM); setEditId(null); setModal('add'); };
   const openEdit = (s) => {
-    setForm({ name:s.name, category:s.category||'', email:s.email||'', phone:s.phone||'', status:s.status });
+    setForm({ name:s.name, category:s.category||'', email:s.email||'', phone:s.phone||'',orders: s.orders ||0, status:s.status });
     setEditId(s.id); setModal('edit');
   };
 
@@ -100,38 +100,116 @@ export default function SuppliersPage({ T, darkMode }) {
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
               <tr style={{ borderBottom:`1px solid ${T.border}` }}>
-                {['Supplier','Category','Rating','Orders','On-Time %','Status','Actions'].map(h => (
+                {['Supplier','Category','Orders','Status','Actions'].map(h => (
                   <th key={h} style={{ padding:'10px 14px', textAlign:'left', fontSize:11, fontWeight:700, color:T.textSub, letterSpacing:'.06em', textTransform:'uppercase' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map(s => (
-                <tr key={s.id} className="row-hover" style={{ borderBottom:`1px solid ${T.border}`, transition:'background .15s' }}>
-                  <td style={{ padding:'13px 14px' }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{s.name}</div>
-                    {s.email && <div style={{ fontSize:11, color:T.textSub }}>{s.email}</div>}
-                  </td>
-                  <td style={{ padding:'13px 14px' }}><span style={{ fontSize:11, padding:'3px 10px', borderRadius:99, background:`${T.a3}18`, color:T.a3 }}>{s.category}</span></td>
-                  <td style={{ padding:'13px 14px', fontSize:13, fontWeight:700, color: s.rating>=4.5?T.green:s.rating>=4.0?T.yellow:T.red }}>★ {s.rating}</td>
-                  <td style={{ padding:'13px 14px', fontSize:13, color:T.text }}>{s.orders}</td>
-                  <td style={{ padding:'13px 14px' }}>
-                    <div style={{ fontSize:12, fontWeight:700, color: s.on_time_percent>=92?T.green:s.on_time_percent>=85?T.yellow:T.red, marginBottom:3 }}>{s.on_time_percent}%</div>
-                    <div style={{ height:4, borderRadius:99, background: darkMode?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)', width:80, overflow:'hidden' }}>
-                      <motion.div initial={{ width:0 }} animate={{ width:`${s.on_time_percent}%` }} transition={{ duration:.8 }}
-                        style={{ height:'100%', background: s.on_time_percent>=92?T.green:s.on_time_percent>=85?T.yellow:T.red, borderRadius:99 }} />
+                <tr
+                key={s.id}
+                className="row-hover"
+                style={{
+                  borderBottom:`1px solid ${T.border}`,
+                  transition:'background .15s'
+                }}
+              >
+                {/* Supplier */}
+                <td style={{ padding:'13px 14px' }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:T.text }}>
+                    {s.name}
+                  </div>
+
+                  {s.email && (
+                    <div style={{ fontSize:11, color:T.textSub }}>
+                      {s.email}
                     </div>
-                  </td>
-                  <td style={{ padding:'13px 14px' }}>
-                    <span style={{ fontSize:11, padding:'3px 10px', borderRadius:99, background:`${sc(s.status)}18`, color:sc(s.status), fontWeight:700, border:`1px solid ${sc(s.status)}33`, textTransform:'capitalize' }}>{s.status}</span>
-                  </td>
-                  <td style={{ padding:'13px 14px' }}>
-                    <div style={{ display:'flex', gap:6 }}>
-                      <button onClick={() => openEdit(s)} style={{ fontSize:11, padding:'4px 10px', borderRadius:6, border:`1px solid ${T.border}`, background:'transparent', cursor:'pointer', color:T.textMid, fontFamily:'inherit' }}>Edit</button>
-                      <button onClick={() => handleDelete(s.id)} style={{ fontSize:11, padding:'4px 10px', borderRadius:6, border:`1px solid ${T.red}44`, background:`${T.red}0E`, cursor:'pointer', color:T.red, fontFamily:'inherit' }}>Remove</button>
-                    </div>
-                  </td>
-                </tr>
+                  )}
+                </td>
+
+                {/* Category */}
+                <td style={{ padding:'13px 14px' }}>
+                  <span
+                    style={{
+                      fontSize:11,
+                      padding:'3px 10px',
+                      borderRadius:99,
+                      background:`${T.a3}18`,
+                      color:T.a3
+                    }}
+                  >
+                    {s.category}
+                  </span>
+                </td>
+
+                {/* Orders */}
+                <td
+                  style={{
+                    padding:'13px 14px',
+                    fontSize:13,
+                    color:T.text,
+                    fontWeight:700
+                  }}
+                >
+                  {s.orders}
+                </td>
+
+                {/* Status */}
+                <td style={{ padding:'13px 14px' }}>
+                  <span
+                    style={{
+                      fontSize:11,
+                      padding:'3px 10px',
+                      borderRadius:99,
+                      background:`${sc(s.status)}18`,
+                      color:sc(s.status),
+                      fontWeight:700,
+                      border:`1px solid ${sc(s.status)}33`,
+                      textTransform:'capitalize'
+                    }}
+                  >
+                    {s.status}
+                  </span>
+                </td>
+
+                {/* Actions */}
+                <td style={{ padding:'13px 14px' }}>
+                  <div style={{ display:'flex', gap:6 }}>
+                    <button
+                      onClick={() => openEdit(s)}
+                      style={{
+                        fontSize:11,
+                        padding:'4px 10px',
+                        borderRadius:6,
+                        border:`1px solid ${T.border}`,
+                        background:'transparent',
+                        cursor:'pointer',
+                        color:T.textMid,
+                        fontFamily:'inherit'
+                      }}
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      onClick={() => handleDelete(s.id)}
+                      style={{
+                        fontSize:11,
+                        padding:'4px 10px',
+                        borderRadius:6,
+                        border:`1px solid ${T.red}44`,
+                        background:`${T.red}0E`,
+                        cursor:'pointer',
+                        color:T.red,
+                        fontFamily:'inherit'
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </td>
+              </tr>
               ))}
               {filtered.length === 0 && !loading && (
                 <tr><td colSpan={7} style={{ textAlign:'center', padding:40, color:T.textSub }}>No suppliers found. Add your first supplier above.</td></tr>
@@ -152,18 +230,73 @@ export default function SuppliersPage({ T, darkMode }) {
               <div style={{ fontWeight:900, fontSize:16, color:T.text, marginBottom:20 }}>{modal === 'add' ? '+ Add Supplier' : '✏️ Edit Supplier'}</div>
               <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
                 {[
-                  { key:'name', label:'Company Name', placeholder:'Supplier Ltd.' },
-                  { key:'category', label:'Category', placeholder:'Electronics' },
-                  { key:'email', label:'Email', placeholder:'contact@supplier.com' },
-                  { key:'phone', label:'Phone', placeholder:'+91-98000-00000' },
-                ].map(f => (
-                  <div key={f.key}>
-                    <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase', letterSpacing:'.05em' }}>{f.label}</div>
-                    <input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder}
-                      style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', color:T.text, fontSize:13, outline:'none', fontFamily:'inherit' }} />
+                { key:'name', label:'Company Name', placeholder:'Supplier Ltd.' },
+                { key:'category', label:'Category', placeholder:'Electronics' },
+                { key:'email', label:'Email', placeholder:'contact@supplier.com' },
+                { key:'phone', label:'Phone', placeholder:'+91-98000-00000' },
+              ].map(f => (
+                <div key={f.key}>
+                  <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase', letterSpacing:'.05em' }}>
+                    {f.label}
                   </div>
-                ))}
-                <div>
+
+                  <input
+                    value={form[f.key]}
+                    onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    style={{
+                      width:'100%',
+                      padding:'10px 14px',
+                      borderRadius:9,
+                      border:`1px solid ${T.border}`,
+                      background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                      color:T.text,
+                      fontSize:13,
+                      outline:'none',
+                      fontFamily:'inherit'
+                    }}
+                  />
+                </div>
+              ))}
+
+              {/* ADD THIS HERE */}
+              <div>
+                <div
+                  style={{
+                    fontSize:11,
+                    fontWeight:700,
+                    color:T.textSub,
+                    marginBottom:6,
+                    textTransform:'uppercase',
+                    letterSpacing:'.05em'
+                  }}
+                >
+                  Orders
+                </div>
+
+                <input
+                  type="number"
+                  value={form.orders}
+                  onChange={e =>
+                    setForm(p => ({
+                      ...p,
+                      orders: Number(e.target.value)
+                    }))
+                  }
+                  placeholder="0"
+                  style={{
+                    width:'100%',
+                    padding:'10px 14px',
+                    borderRadius:9,
+                    border:`1px solid ${T.border}`,
+                    background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                    color:T.text,
+                    fontSize:13,
+                    outline:'none',
+                    fontFamily:'inherit'
+                  }}
+                />
+              </div>
                   <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase', letterSpacing:'.05em' }}>Status</div>
                   <select value={form.status} onChange={e => setForm(p => ({ ...p, status:e.target.value }))}
                     style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'#0D1526':'#fff', color:T.text, fontSize:13, outline:'none', fontFamily:'inherit' }}>
@@ -172,7 +305,7 @@ export default function SuppliersPage({ T, darkMode }) {
                     <option value="review">Under Review</option>
                   </select>
                 </div>
-              </div>
+              
               <div style={{ display:'flex', gap:10, marginTop:22, justifyContent:'flex-end' }}>
                 <button onClick={() => setModal(null)} style={{ padding:'10px 20px', borderRadius:9, border:`1px solid ${T.border}`, background:'transparent', cursor:'pointer', fontSize:13, color:T.textMid, fontFamily:'inherit' }}>Cancel</button>
                 <button onClick={handleSave} disabled={saving} style={{ padding:'10px 24px', borderRadius:9, border:'none', background:`linear-gradient(135deg,${T.a2},${T.a1})`, color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:'inherit', opacity: saving?.7:1 }}>

@@ -14,6 +14,7 @@ import AIAssistantPage    from './AIAssistantPage';
 import WarehousePage      from './WarehousePage';
 import UserManagementPage from './UserManagementPage';
 import MessagesPage       from './MessagesPage';
+import HistoryPage        from './HistoryPage';
 
 const ADMIN_NAV = [
   { id:'overview',      icon:'🏠', label:'Overview' },
@@ -24,6 +25,7 @@ const ADMIN_NAV = [
   { id:'reports',       icon:'📊', label:'Reports' },
   { id:'users',         icon:'👥', label:'Users' },
   { id:'notifications', icon:'🔔', label:'Alerts & Notifications' },
+  { id:'history',       icon:'📜', label:'Audit History' },
   { id:'messages',      icon:'💬', label:'User Messages' },
   { id:'ai',            icon:'✨', label:'AI Assistant' },
 ];
@@ -529,6 +531,7 @@ export default function AdminDashboard({ darkMode, onToggleDarkMode, onLogout, a
               {active === 'users'         && <UserManagementPage T={T} darkMode={darkMode} />}
               {active === 'ai'            && <AIAssistantPage    T={T} darkMode={darkMode} isAdmin={true} />}
               {active === 'notifications' && <NotificationsPage  T={T} darkMode={darkMode} isAdmin={true} />}
+              {active === 'history'       && <HistoryPage        T={T} darkMode={darkMode} />}
               {active === 'messages'      && <MessagesPage       T={T} darkMode={darkMode} isAdmin={true} />}
             </motion.div>
           </AnimatePresence>

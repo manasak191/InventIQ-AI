@@ -246,7 +246,7 @@ export default function ReportsPage({ T, darkMode }) {
         ['Transfers', summary.txn_count_trf],
         ['Total Orders', summary.total_orders],
         ['Avg Order Value', summary.avg_order_value !== null ? fmt(summary.avg_order_value) : 'N/A'],
-        ['On-Time Delivery', summary.on_time_delivery !== null ? `${summary.on_time_delivery}%` : 'N/A'],
+        
       ];
       downloadCSV(rows, `inventiq-summary-${ts}.csv`);
     } else if (type === 'inventory-csv') {
@@ -379,12 +379,7 @@ export default function ReportsPage({ T, darkMode }) {
                       nullReason:'need stock-out transactions',
                       sub:'Annualized (OUT / Stock Value × 12)',
                     },
-                    {
-                      label:'On-Time Delivery', icon:'🚚', color:T.yellow,
-                      value: summary?.on_time_delivery !== null && summary?.on_time_delivery !== undefined ? `${summary.on_time_delivery}%` : null,
-                      nullReason:'no supplier data',
-                      sub:'Avg across suppliers with data',
-                    },
+                    
                     {
                       label:'Stockout Events', icon:'🚨', color:T.red,
                       value: summary !== null ? String(summary.stockout_events) : null,
@@ -727,7 +722,7 @@ export default function ReportsPage({ T, darkMode }) {
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, marginBottom:20 }}>
                       {[
                         { label:'Total Suppliers', v:supData?.suppliers?.length || 0, c:T.a1, icon:'🤝' },
-                        { label:'On-Time Delivery', v:summary?.on_time_delivery!==null&&summary?.on_time_delivery!==undefined?`${summary.on_time_delivery}%`:null, c:T.green, icon:'🚚' },
+                        
                         { label:'Preferred Suppliers', v:supData?.suppliers?.filter(s=>s.status==='preferred').length || 0, c:T.a2, icon:'⭐' },
                       ].map((k,i)=>(
                         <motion.div key={k.label} initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} transition={{ delay:i*.07 }}

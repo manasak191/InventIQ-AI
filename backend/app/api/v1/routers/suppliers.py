@@ -17,9 +17,9 @@ def serialize(s: Supplier) -> dict:
         "category": s.category,
         "email": s.email,
         "phone": s.phone,
-        "rating": s.rating,
+        
         "orders": s.orders,
-        "on_time_percent": s.on_time_percent,
+        
         "total_value": s.total_value,
         "status": s.status,
     }

@@ -61,15 +61,7 @@ def report_summary(
         inventory_turnover = None
 
     # ── On-Time Delivery ───────────────────────────────────────
-    suppliers_with_data = [
-        s for s in suppliers if s.on_time_percent and s.on_time_percent > 0
-    ]
-    if suppliers_with_data:
-        on_time_delivery = round(
-            sum(s.on_time_percent for s in suppliers_with_data) / len(suppliers_with_data), 1
-        )
-    else:
-        on_time_delivery = None
+   
 
     # ── Orders ─────────────────────────────────────────────────
     total_orders_value = sum(o.total_value for o in orders)
@@ -104,7 +96,7 @@ def report_summary(
         "stock_accuracy":       stock_accuracy,
         "gross_margin":         gross_margin,
         "inventory_turnover":   inventory_turnover,
-        "on_time_delivery":     on_time_delivery,
+        
 
         "total_revenue":        total_out_value,
         "total_in_value":       total_in_value,
@@ -206,17 +198,16 @@ def report_suppliers(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    suppliers = db.query(Supplier).order_by(Supplier.rating.desc()).all()
+    suppliers = db.query(Supplier).order_by(Supplier.orders.desc()).all()
+
     return {
         "suppliers": [
             {
-                "name":            s.name,
-                "category":        s.category,
-                "rating":          s.rating,
-                "on_time_percent": s.on_time_percent,
-                "orders":          s.orders,
-                "total_value":     s.total_value,
-                "status":          s.status,
+                "name": s.name,
+                "category": s.category,
+                "orders": s.orders,
+                "total_value": s.total_value,
+                "status": s.status,
             }
             for s in suppliers
         ],

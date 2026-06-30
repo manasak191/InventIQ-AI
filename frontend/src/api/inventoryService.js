@@ -231,6 +231,37 @@ export const messageService = {
   },
 };
 
+export const historyService = {
+  getAll: async (params = {}) => {
+    try {
+      const { data } = await api.get('/history', { params });
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  getSummary: async () => {
+    try {
+      const { data } = await api.get('/history/summary');
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+};
+
+/* ── TRANSACTIONS — edit/delete (admin only) ─────────── */
+export const transactionAdminService = {
+  update: async (id, payload) => {
+    try {
+      const { data } = await api.put(`/transactions/${id}`, payload);
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+  delete: async (id) => {
+    try {
+      const { data } = await api.delete(`/transactions/${id}`);
+      return { data, error: null };
+    } catch (err) { return { data: null, error: extractError(err).message }; }
+  },
+};
+
 /* ── REPORTS / ANALYTICS ────────────────────────────── */
 export const reportService = {
   getSummary: async (params = {}) => {
