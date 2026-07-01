@@ -14,8 +14,6 @@ venv\Scripts\activate           # Windows
 # Install dependencies
 pip install -r requirements.txt
 
-# Setup environment
-cp .env.example .env
 # Edit .env with your PostgreSQL and Gmail credentials
 
 # Run server
