@@ -5,6 +5,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
+from app.services.audit_service import log_action
+from app.core.deps import get_current_user, require_admin
+
 from app.db.database import get_db
 from app.db.models.product import Product
 from app.core.deps import get_current_user
@@ -85,51 +88,60 @@ def get_product(
 
 
 @router.post("")
-def create_product(
-    payload: ProductCreate,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    existing = db.query(Product).filter(Product.sku == payload.sku).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="SKU already exists")
-
-    product = Product(**payload.dict())
-    db.add(product)
+def create_product(payload: ProductCreate, db: Session = Depends(get_db),
+                    current_user=Depends(get_current_user)):
+    new_product = Product(**payload.dict())
+    db.add(new_product)
     db.commit()
-    db.refresh(product)
-    return serialize(product)
+    db.refresh(new_product)
+ 
+    # 👇 NEW: log it
+    log_action(
+        db, module="product", action="CREATE",
+        record_id=new_product.id, record_label=new_product.name,
+        user=current_user, detail=f"Created product (SKU: {new_product.sku})"
+    )
+ 
+    return new_product
+
 
 
 @router.put("/{product_id}")
-def update_product(
-    product_id: int,
-    payload: ProductUpdate,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
+def update_product(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db),
+                    current_user=Depends(get_current_user)):
     product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
+    old_stock = product.stock
+ 
     for field, value in payload.dict(exclude_unset=True).items():
         setattr(product, field, value)
-
     db.commit()
     db.refresh(product)
-    return serialize(product)
-
-
+ 
+    # 👇 NEW: log it
+    log_action(
+        db, module="product", action="UPDATE",
+        record_id=product.id, record_label=product.name,
+        user=current_user,
+        detail=f"Updated product (stock {old_stock} → {product.stock})"
+    )
+ 
+    return product
+ 
+ 
 @router.delete("/{product_id}")
-def delete_product(
-    product_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
+def delete_product(product_id: int, db: Session = Depends(get_db),
+                    current_user=Depends(require_admin)):  # delete = admin only
     product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
+    label = product.name
+ 
     db.delete(product)
     db.commit()
+ 
+    # 👇 NEW: log it
+    log_action(
+        db, module="product", action="DELETE",
+        record_id=product_id, record_label=label,
+        user=current_user, detail="Product permanently deleted"
+    )
+ 
     return {"message": "Product deleted"}

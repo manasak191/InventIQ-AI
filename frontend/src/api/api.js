@@ -10,7 +10,7 @@ const ROLE_KEY  = 'inventiq_role';
 const USER_KEY  = 'inventiq_user';
 
 export const tokenStorage = {
-  getToken   : ()        => localStorage.getItem(TOKEN_KEY),
+  getToken   : ()        => sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY),
   setToken   : (t)       => localStorage.setItem(TOKEN_KEY, t),
   removeToken: ()        => localStorage.removeItem(TOKEN_KEY),
 

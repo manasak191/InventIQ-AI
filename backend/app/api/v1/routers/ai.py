@@ -46,21 +46,27 @@ def get_restricted_topic(message: str) -> Optional[str]:
     return None
 
 
-def build_context(db: Session, is_admin: bool) -> str:
+def build_context(db: Session, is_admin: bool,current_user=None) -> str:
     """Pull live inventory data and turn it into a compact text block the LLM can reason over.
     is_admin controls whether sensitive data (user accounts) is included at all —
     if it's not in the context, the LLM has no way to reveal it, regardless of phrasing."""
-    products = db.query(Product).all()
-    suppliers = db.query(Supplier).all()
-    users = db.query(User).all() if is_admin else []
+    
+    products     = db.query(Product).all()
+    suppliers    = db.query(Supplier).all()
     transactions = db.query(Transaction).order_by(Transaction.id.desc()).all()
+
+    # Users data — admin sees all users summary, user sees ONLY their own info
+    if is_admin:
+        users = db.query(User).all()
+    else:
+        users = []  # never include other users' data for regular users
 
     if not products:
         return "INVENTORY DATA: No products currently in the database."
 
-    low_stock = [p for p in products if p.stock <= p.reorder_point]
-    critical = [p for p in products if p.stock <= p.reorder_point * 0.5]
-    total_value = sum(p.stock * p.price for p in products)
+    low_stock     = [p for p in products if p.stock <= p.reorder_point]
+    critical      = [p for p in products if p.stock <= p.reorder_point * 0.5]
+    total_value   = sum(p.stock * p.price for p in products)
 
     warehouse_totals = {}
     for p in products:
@@ -68,14 +74,44 @@ def build_context(db: Session, is_admin: bool) -> str:
         warehouse_totals[w] = warehouse_totals.get(w, 0) + p.stock
 
     lines = []
-    summary = f"SUMMARY: {len(products)} SKUs tracked, total stock value ₹{total_value:,.0f}, {len(suppliers)} suppliers on file."
+
+    # ── Summary line — user version never mentions other users ──
     if is_admin:
-        summary += f" {len(users)} registered users."
+        all_users = db.query(User).all()
+        summary = (
+            f"SUMMARY: {len(products)} SKUs tracked, total stock value "
+            f"₹{total_value:,.0f}, {len(suppliers)} suppliers, "
+            f"{len(all_users)} registered users."
+        )
+    else:
+        summary = (
+            f"SUMMARY: {len(products)} SKUs tracked, total stock value "
+            f"₹{total_value:,.0f}, {len(suppliers)} suppliers."
+        )
     lines.append(summary)
 
+    # ── Current user info (for non-admin only their own profile) ──
+    if not is_admin and current_user:
+        name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
+        lines.append(
+            f"\nCURRENT USER: {name} | role={current_user.role} | "
+            f"email={current_user.email} | active={current_user.is_active}"
+        )
+        # Only show THIS user's transactions
+        my_txns = [t for t in transactions if t.user_id == current_user.id]
+        lines.append(
+            f"MY TRANSACTIONS: {len(my_txns)} total — "
+            f"{len([t for t in my_txns if t.type == 'IN'])} IN, "
+            f"{len([t for t in my_txns if t.type == 'OUT'])} OUT"
+        )
+
     lines.append("\nPRODUCTS (sku | name | stock | reorder_point | price | warehouse):")
-    for p in products[:200]:  # cap to keep prompt size sane
-        lines.append(f"- {p.sku} | {p.name} | stock={p.stock} | reorder_point={p.reorder_point} | price=₹{p.price} | warehouse={p.warehouse or 'Unassigned'}")
+    for p in products[:200]:
+        lines.append(
+            f"- {p.sku} | {p.name} | stock={p.stock} | "
+            f"reorder_point={p.reorder_point} | price=₹{p.price} | "
+            f"warehouse={p.warehouse or 'Unassigned'}"
+        )
 
     if low_stock:
         lines.append(f"\nLOW STOCK ({len(low_stock)} items at or below reorder point):")
@@ -83,7 +119,7 @@ def build_context(db: Session, is_admin: bool) -> str:
             lines.append(f"- {p.sku} ({p.name}): {p.stock} left, reorder point {p.reorder_point}")
 
     if critical:
-        lines.append(f"\nCRITICAL STOCKOUT RISK ({len(critical)} items at <=50% of reorder point):")
+        lines.append(f"\nCRITICAL STOCKOUT RISK ({len(critical)} items):")
         for p in critical[:30]:
             lines.append(f"- {p.sku} ({p.name}): only {p.stock} left")
 
@@ -93,42 +129,65 @@ def build_context(db: Session, is_admin: bool) -> str:
             lines.append(f"- {w}: {total} units")
 
     if suppliers:
-        lines.append("\nSUPPLIERS (name | rating | on_time_percent):")
+        lines.append("\nSUPPLIERS (name | category | email | status | rating | on_time_percent | orders):")
         for s in suppliers[:50]:
-            lines.append(f"- {s.name} | {s.rating}★ | {s.on_time_percent}% on-time")
+            rating   = getattr(s, 'rating', 'N/A')
+            on_time  = getattr(s, 'on_time_percent', 'N/A')
+            category = getattr(s, 'category', 'N/A')
+            email    = getattr(s, 'email', 'N/A')
+            status   = getattr(s, 'status', 'active')
+            orders   = getattr(s, 'orders', 0)
+            lines.append(
+                f"- {s.name} | category={category} | email={email} | "
+                f"status={status} | rating={rating}★ | on_time={on_time}% | orders={orders}"
+            )
 
-    if users:
-        active = [u for u in users if u.is_active]
+    # ── Transactions — admin sees all, user sees only their own ──
+    if is_admin:
+        if transactions:
+            total_in  = sum(t.value or 0 for t in transactions if t.type == "IN")
+            total_out = sum(t.value or 0 for t in transactions if t.type == "OUT")
+            lines.append(
+                f"\nTRANSACTIONS SUMMARY: {len(transactions)} total — "
+                f"{len([t for t in transactions if t.type == 'IN'])} IN (₹{total_in:,.0f}), "
+                f"{len([t for t in transactions if t.type == 'OUT'])} OUT (₹{total_out:,.0f})"
+            )
+            lines.append("\nRECENT TRANSACTIONS (date | type | sku | product | qty | value | warehouse | by):")
+            for t in transactions[:50]:
+                date = t.created_at.strftime("%Y-%m-%d") if t.created_at else "unknown"
+                lines.append(
+                    f"- {date} | {t.type} | {t.sku} | {t.product_name} | "
+                    f"qty={t.qty} | ₹{t.value:,.0f} | "
+                    f"{t.warehouse or 'Unassigned'} | {t.user_name or 'unknown'}"
+                )
+    else:
+        # User only sees their own transactions
+        if current_user:
+            my_txns = [t for t in transactions if t.user_id == current_user.id]
+            if my_txns:
+                lines.append(f"\nMY RECENT TRANSACTIONS:")
+                for t in my_txns[:20]:
+                    date = t.created_at.strftime("%Y-%m-%d") if t.created_at else "unknown"
+                    lines.append(
+                        f"- {date} | {t.type} | {t.sku} | {t.product_name} | "
+                        f"qty={t.qty} | ₹{t.value:,.0f} | {t.warehouse or 'Unassigned'}"
+                    )
+
+    # ── Users — admin only, never shown to regular users ──
+    if is_admin and users:
+        active      = [u for u in users if u.is_active]
         role_counts = {}
         for u in users:
             r = u.role or "unassigned"
             role_counts[r] = role_counts.get(r, 0) + 1
-        lines.append(f"\nUSERS: {len(users)} total, {len(active)} active, {len(users) - len(active)} inactive.")
-        lines.append("User roles breakdown: " + ", ".join(f"{r}: {c}" for r, c in role_counts.items()))
-        lines.append("User list (name | role | active):")
-        for u in users[:100]:
-            name = f"{u.first_name or ''} {u.last_name or ''}".strip() or "(no name set)"
-            lines.append(f"- {name} | {u.role or 'unassigned'} | {'active' if u.is_active else 'inactive'}")
-
-    if transactions:
-        total_in = sum(t.value or 0 for t in transactions if t.type == "IN")
-        total_out = sum(t.value or 0 for t in transactions if t.type == "OUT")
-        in_count = len([t for t in transactions if t.type == "IN"])
-        out_count = len([t for t in transactions if t.type == "OUT"])
-        trf_count = len([t for t in transactions if t.type == "TRF"])
-
         lines.append(
-            f"\nTRANSACTIONS SUMMARY: {len(transactions)} total — "
-            f"{in_count} stock-in (₹{total_in:,.0f}), {out_count} stock-out (₹{total_out:,.0f}), "
-            f"{trf_count} transfers."
+            f"\nUSERS: {len(users)} total, {len(active)} active. "
+            f"Roles: {', '.join(f'{r}: {c}' for r, c in role_counts.items())}"
         )
-        lines.append("\nRECENT TRANSACTIONS (date | type | sku | product | qty | value | warehouse | by | note):")
-        for t in transactions[:50]:  # most recent first (already ordered desc), capped for prompt size
-            date = t.created_at.strftime("%Y-%m-%d") if t.created_at else "unknown"
-            lines.append(
-                f"- {date} | {t.type} | {t.sku} | {t.product_name} | qty={t.qty} | ₹{t.value:,.0f} | "
-                f"{t.warehouse or 'Unassigned'} | {t.user_name or 'unknown'} | {t.note or '-'}"
-            )
+        lines.append("USER LIST (name | role | active):")
+        for u in users[:100]:
+            name = f"{u.first_name or ''} {u.last_name or ''}".strip() or "(no name)"
+            lines.append(f"- {name} | {u.role or 'unassigned'} | {'active' if u.is_active else 'inactive'}")
 
     return "\n".join(lines)
 

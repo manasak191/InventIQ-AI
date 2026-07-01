@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const Sidebar = ({ nav, active, setActive, sideOpen, setSideOpen, darkMode, T, accentGrad, logoIcon, consoleLabel }) => (
@@ -48,9 +48,35 @@ export const Sidebar = ({ nav, active, setActive, sideOpen, setSideOpen, darkMod
   </motion.aside>
 );
 
-export const Topbar = ({ nav, active, T, darkMode, onToggleDarkMode, onLogout, userName, roleLabel, notifications, unreadCount, accentGrad }) => {
+export const Topbar = ({
+  nav, active, T, darkMode, onToggleDarkMode, onLogout, userName, roleLabel,
+  notifications, unreadCount, accentGrad,
+  // 👇 NEW: pass these from the parent dashboard to open your existing modals
+  onOpenProfile, onOpenSettings, onOpenChangePassword,
+  userEmail, // 👈 NEW: optional, shown under the name in the dropdown header
+}) => {
   const [notifOpen, setNotifOpen] = React.useState(false);
   const [profileOpen, setProfileOpen] = React.useState(false);
+
+  // 👇 NEW: click-outside-to-close for both dropdowns
+  const notifRef = useRef(null);
+  const profileRef = useRef(null);
+  useEffect(() => {
+    const handler = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const initials = (userName || 'U').trim().split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
+
+  const menuItems = [
+    { icon: '👤', label: 'My Profile',       onClick: onOpenProfile },
+    { icon: '⚙️', label: 'Settings',          onClick: onOpenSettings },
+    { icon: '🔑', label: 'Change Password',   onClick: onOpenChangePassword },
+  ];
 
   return (
     <header style={{ height: 64, background: T.bgCard, borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', flexShrink: 0, position: 'sticky', top: 0, zIndex: 40 }}>
@@ -72,7 +98,7 @@ export const Topbar = ({ nav, active, T, darkMode, onToggleDarkMode, onLogout, u
         </button>
 
         {/* Notifications */}
-        <div style={{ position: 'relative' }}>
+        <div ref={notifRef} style={{ position: 'relative' }}>
           <button onClick={() => { setNotifOpen(v => !v); setProfileOpen(false); }}
             style={{ background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)', border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 11px', cursor: 'pointer', fontSize: 15, position: 'relative' }}>
             🔔
@@ -100,29 +126,77 @@ export const Topbar = ({ nav, active, T, darkMode, onToggleDarkMode, onLogout, u
           )}</AnimatePresence>
         </div>
 
-        {/* Profile */}
-        <div style={{ position: 'relative' }}>
-          <button onClick={() => { setProfileOpen(v => !v); setNotifOpen(false); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-            <div style={{ width: 34, height: 34, borderRadius: '50%', background: accentGrad, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, color: '#fff', flexShrink: 0 }}>
-              {(userName || 'U')[0]}
+        {/* ═══ Profile — upgraded to SaaS-style dropdown ═══ */}
+        <div ref={profileRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => { setProfileOpen(v => !v); setNotifOpen(false); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 9,
+              background: profileOpen ? `${T.a1}0E` : 'transparent',
+              border: `1px solid ${profileOpen ? T.a1 + '55' : 'transparent'}`,
+              borderRadius: 99, cursor: 'pointer', padding: '5px 10px 5px 5px',
+              transition: 'all .15s', fontFamily: 'inherit',
+            }}
+          >
+            <div style={{ position: 'relative', width: 34, height: 34, flexShrink: 0 }}>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: accentGrad, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, color: '#fff' }}>
+                {initials}
+              </div>
+              {/* online status dot */}
+              <div style={{ position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderRadius: '50%', background: T.green, border: `2px solid ${T.bgCard}` }} />
             </div>
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{userName}</div>
               <div style={{ fontSize: 10, color: T.a2, fontWeight: 700 }}>{roleLabel}</div>
             </div>
+            <span style={{ fontSize: 9, color: T.textSub, marginLeft: 2, transform: profileOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>▾</span>
           </button>
+
           <AnimatePresence>{profileOpen && (
             <motion.div initial={{ opacity: 0, y: 8, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: .96 }}
-              style={{ position: 'absolute', right: 0, top: 46, width: 200, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12, boxShadow: `0 16px 40px rgba(0,0,0,.3)`, zIndex: 200, overflow: 'hidden' }}>
-              {[{ icon: '👤', label: 'My Profile' }, { icon: '⚙️', label: 'Settings' }, { icon: '🔑', label: 'Change Password' }].map(item => (
-                <button key={item.label} className="nav-item" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, color: T.textMid }}>
-                  <span>{item.icon}</span>{item.label}
-                </button>
-              ))}
-              <div style={{ borderTop: `1px solid ${T.border}` }}>
-                <button className="nav-item" onClick={onLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, color: T.red }}>
-                  <span>🚪</span>Sign Out
+              transition={{ duration: .15 }}
+              style={{ position: 'absolute', right: 0, top: 48, width: 250, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: `0 16px 44px rgba(0,0,0,.4)`, zIndex: 200, overflow: 'hidden' }}>
+
+              {/* Header block */}
+              <div style={{ padding: '16px 16px 14px', borderBottom: `1px solid ${T.border}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: accentGrad, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                    {initials}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</div>
+                    {userEmail && <div style={{ fontSize: 11, color: T.textSub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userEmail}</div>}
+                  </div>
+                </div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, padding: '3px 9px', borderRadius: 99, background: `${T.a1}18`, fontSize: 10.5, fontWeight: 700, color: T.a1 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.a1 }} />
+                  {roleLabel}
+                </div>
+              </div>
+
+              {/* Account actions — now actually wired up */}
+              <div style={{ padding: 8 }}>
+                {menuItems.map(item => (
+                  <button key={item.label}
+                    onClick={() => { item.onClick?.(); setProfileOpen(false); }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px', borderRadius: 9, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: T.textMid, textAlign: 'left', transition: 'background .15s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.045)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{ fontSize: 15, width: 18, textAlign: 'center' }}>{item.icon}</span>{item.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ height: 1, background: T.border, margin: '2px 0' }} />
+
+              <div style={{ padding: 8 }}>
+                <button onClick={() => { onLogout(); setProfileOpen(false); }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px', borderRadius: 9, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: T.red, textAlign: 'left', transition: 'background .15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = `${T.red}12`}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span style={{ fontSize: 15, width: 18, textAlign: 'center' }}>🚪</span>Sign Out
                 </button>
               </div>
             </motion.div>

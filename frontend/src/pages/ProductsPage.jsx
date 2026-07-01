@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { inventoryService, notificationService, warehouseService } from '../api/inventoryService';
+import { inventoryService, notificationService, warehouseService, supplierService } from '../api/inventoryService';
+// 👆 NEW: import supplierService (make sure this export exists in inventoryService.js —
+//         if your supplier calls live in a differently-named service/file, adjust this import)
 
-const EMPTY_FORM = { sku:'', name:'', category:'', stock:'', reorder_point:'', price:'', warehouse:'' };
+const EMPTY_FORM = { sku:'', name:'', category:'', stock:'', reorder_point:'', price:'', warehouse:'', supplier:'' };
+// 👆 NEW: added `supplier` field
 
 // isAdmin = true  → Add + Edit + Delete + Export CSV
 // isAdmin = false → Add + Edit only, NO Delete, NO Export
@@ -20,6 +23,8 @@ export default function ProductsPage({ T, darkMode, isAdmin = false }) {
 
   // Real warehouses for the dropdown — no more free-typed warehouse names.
   const [warehouses, setWarehouses] = useState([]);
+  // 👇 NEW: real suppliers for the dropdown
+  const [suppliers, setSuppliers]   = useState([]);
 
   const card = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: 22 };
   const sc = (s) => s === 'critical' ? T.red : s === 'low' ? T.yellow : T.green;
@@ -51,7 +56,14 @@ export default function ProductsPage({ T, darkMode, isAdmin = false }) {
     setWarehouses(Array.isArray(data) ? data : []);
   };
 
-  useEffect(() => { load(); loadWarehouses(); }, []);
+  // 👇 NEW: same pattern as loadWarehouses, just for suppliers
+  const loadSuppliers = async () => {
+    const { data } = await supplierService.getAll();
+    setSuppliers(Array.isArray(data) ? data : []);
+  };
+
+  useEffect(() => { load(); loadWarehouses(); loadSuppliers(); }, []);
+  // 👆 CHANGED: added loadSuppliers() call
 
   const filtered = items.filter(item => {
     const matchSearch = item.name?.toLowerCase().includes(search.toLowerCase()) || item.sku?.toLowerCase().includes(search.toLowerCase());
@@ -61,7 +73,12 @@ export default function ProductsPage({ T, darkMode, isAdmin = false }) {
 
   const openAdd  = () => { setForm(EMPTY_FORM); setEditId(null); setModal('add'); };
   const openEdit = (item) => {
-    setForm({ sku: item.sku, name: item.name, category: item.category || '', stock: item.stock, reorder_point: item.reorder_point, price: item.price, warehouse: item.warehouse || '' });
+    setForm({
+      sku: item.sku, name: item.name, category: item.category || '',
+      stock: item.stock, reorder_point: item.reorder_point, price: item.price,
+      warehouse: item.warehouse || '',
+      supplier: item.supplier || '',   // 👈 NEW
+    });
     setEditId(item.id); setModal('edit');
   };
 
@@ -148,7 +165,8 @@ export default function ProductsPage({ T, darkMode, isAdmin = false }) {
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
               <tr style={{ borderBottom:`1px solid ${T.border}` }}>
-                {['SKU','Product','Category','Stock','Reorder Pt','Price','Warehouse','Status','Actions'].map(h => (
+                {['SKU','Product','Category','Stock','Reorder Pt','Price','Warehouse','Supplier','Status','Actions'].map(h => (
+                  // 👆 NEW: added 'Supplier' column header
                   <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:T.textSub, letterSpacing:'.05em', textTransform:'uppercase' }}>{h}</th>
                 ))}
               </tr>
@@ -165,6 +183,8 @@ export default function ProductsPage({ T, darkMode, isAdmin = false }) {
                   <td style={{ padding:'12px 12px', fontSize:12, color:T.textMid }}>{item.reorder_point}</td>
                   <td style={{ padding:'12px 12px', fontSize:13, color:T.text }}>₹{Number(item.price).toLocaleString()}</td>
                   <td style={{ padding:'12px 12px', fontSize:12, color:T.textMid }}>{item.warehouse}</td>
+                  <td style={{ padding:'12px 12px', fontSize:12, color:T.textMid }}>{item.supplier || '—'}</td>
+                  {/* 👆 NEW: Supplier cell */}
                   <td style={{ padding:'12px 12px' }}>
                     <span style={{ fontSize:11, padding:'3px 9px', borderRadius:99, background:`${sc(item.status)}18`, color:sc(item.status), fontWeight:700, border:`1px solid ${sc(item.status)}33`, textTransform:'capitalize' }}>
                       {item.status === 'critical' ? '🚨 Critical' : item.status === 'low' ? '⚠️ Low' : '✅ OK'}
@@ -190,7 +210,8 @@ export default function ProductsPage({ T, darkMode, isAdmin = false }) {
               ))}
               {filtered.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={9} style={{ textAlign:'center', padding:40, color:T.textSub }}>
+                  <td colSpan={10} style={{ textAlign:'center', padding:40, color:T.textSub }}>
+                    {/* 👆 CHANGED colSpan from 9 → 10 to account for new Supplier column */}
                     No products found. {isAdmin ? 'Add your first product using the button above.' : 'Use the Add Product button to add one.'}
                   </td>
                 </tr>
@@ -233,7 +254,7 @@ export default function ProductsPage({ T, darkMode, isAdmin = false }) {
                   </div>
                 ))}
 
-                {/* Warehouse — now a dropdown sourced from real warehouses instead of free text */}
+                {/* Warehouse — dropdown sourced from real warehouses */}
                 <div>
                   <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase', letterSpacing:'.05em' }}>Warehouse</div>
                   <select
@@ -244,6 +265,21 @@ export default function ProductsPage({ T, darkMode, isAdmin = false }) {
                     <option style={{ background: T.bgCard, color: T.text }} value="">{warehouses.length ? 'Select a warehouse…' : 'No warehouses found'}</option>
                     {warehouses.map(w => (
                       <option style={{ background: T.bgCard, color: T.text }} key={w.id} value={w.name}>{w.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 👇 NEW: Supplier — dropdown sourced from real suppliers, mirrors the warehouse pattern exactly */}
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:T.textSub, marginBottom:6, textTransform:'uppercase', letterSpacing:'.05em' }}>Supplier</div>
+                  <select
+                    value={form.supplier}
+                    onChange={e => setForm(p => ({ ...p, supplier: e.target.value }))}
+                    style={{ width:'100%', padding:'10px 14px', borderRadius:9, border:`1px solid ${T.border}`, background: darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', color:T.text, fontSize:13, outline:'none', fontFamily:'inherit', colorScheme: darkMode ? 'dark' : 'light' }}
+                  >
+                    <option style={{ background: T.bgCard, color: T.text }} value="">{suppliers.length ? 'Select a supplier…' : 'No suppliers found'}</option>
+                    {suppliers.map(s => (
+                      <option style={{ background: T.bgCard, color: T.text }} key={s.id} value={s.name}>{s.name}</option>
                     ))}
                   </select>
                 </div>

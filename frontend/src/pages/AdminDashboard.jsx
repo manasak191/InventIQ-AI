@@ -59,6 +59,18 @@ export default function AdminDashboard({ darkMode, onToggleDarkMode, onLogout, a
   const [notifOpen, setNotifOpen]     = useState(false);
   const searchTimer = useRef(null);
 
+  // 👇 NEW: refs for click-outside-to-close
+  const profileRef = useRef(null);
+  const notifRef   = useRef(null);
+  useEffect(() => {
+    const handler = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   // Admin uses purple/blue — visually distinct from user teal/blue
   const accentGrad = `linear-gradient(135deg,${T.a2},${T.a1})`;
   const C = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 };
@@ -238,7 +250,7 @@ export default function AdminDashboard({ darkMode, onToggleDarkMode, onLogout, a
             </button>
 
             {/* Notifications bell */}
-            <div style={{ position:'relative' }}>
+            <div ref={notifRef} style={{ position:'relative' }}>
               <button onClick={() => { setNotifOpen(v=>!v); setProfileOpen(false); }}
                 style={{ background: darkMode?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)', border:`1px solid ${T.border}`, borderRadius:8, padding:'7px 11px', cursor:'pointer', fontSize:15, position:'relative' }}>
                 🔔
@@ -270,40 +282,74 @@ export default function AdminDashboard({ darkMode, onToggleDarkMode, onLogout, a
               </AnimatePresence>
             </div>
 
-            {/* Profile dropdown — NOT logout */}
-            <div style={{ position:'relative' }}>
+            {/* ═══ Profile dropdown — polished SaaS style ═══ */}
+            <div ref={profileRef} style={{ position:'relative' }}>
               <button onClick={() => { setProfileOpen(v=>!v); setNotifOpen(false); }}
-                style={{ display:'flex', alignItems:'center', gap:8, background:'none', border:'none', cursor:'pointer', padding:0 }}>
-                <div style={{ width:34, height:34, borderRadius:'50%', background:accentGrad, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:900, color:'#fff' }}>
-                  {(adminName||'A')[0].toUpperCase()}
+                style={{
+                  display:'flex', alignItems:'center', gap:8,
+                  background: profileOpen ? `${T.a2}0E` : 'none',
+                  border: `1px solid ${profileOpen ? T.a2 + '55' : 'transparent'}`,
+                  borderRadius:99, cursor:'pointer', padding:'5px 10px 5px 5px', transition:'all .15s', fontFamily:'inherit',
+                }}>
+                <div style={{ position:'relative', width:34, height:34, flexShrink:0 }}>
+                  <div style={{ width:34, height:34, borderRadius:'50%', background:accentGrad, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:900, color:'#fff' }}>
+                    {(adminName||'A')[0].toUpperCase()}
+                  </div>
+                  <div style={{ position:'absolute', bottom:-1, right:-1, width:10, height:10, borderRadius:'50%', background:T.green, border:`2px solid ${T.bgCard}` }} />
                 </div>
                 <div style={{ textAlign:'left' }}>
                   <div style={{ fontSize:12, fontWeight:700, color:T.text }}>{adminName}</div>
                   <div style={{ fontSize:10, color:T.a2, fontWeight:700 }}>Administrator</div>
                 </div>
+                <span style={{ fontSize:9, color:T.textSub, marginLeft:2, transform: profileOpen?'rotate(180deg)':'none', transition:'transform .2s' }}>▾</span>
               </button>
               <AnimatePresence>
                 {profileOpen && (
                   <motion.div initial={{ opacity:0, y:8, scale:.96 }} animate={{ opacity:1, y:0, scale:1 }} exit={{ opacity:0, y:8 }}
-                    style={{ position:'absolute', right:0, top:46, width:200, background:T.bgCard, border:`1px solid ${T.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(0,0,0,.3)', zIndex:300, overflow:'hidden' }}>
-                    <div style={{ padding:'12px 14px', borderBottom:`1px solid ${T.border}` }}>
-                      <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{adminName}</div>
-                      <div style={{ fontSize:10, color:T.a2, fontWeight:600 }}>Administrator</div>
+                    transition={{ duration:.15 }}
+                    style={{ position:'absolute', right:0, top:48, width:230, background:T.bgCard, border:`1px solid ${T.border}`, borderRadius:14, boxShadow:'0 16px 44px rgba(0,0,0,.4)', zIndex:300, overflow:'hidden' }}>
+
+                    {/* Header block */}
+                    <div style={{ padding:'16px 16px 14px', borderBottom:`1px solid ${T.border}` }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                        <div style={{ width:38, height:38, borderRadius:'50%', background:accentGrad, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:800, color:'#fff', flexShrink:0 }}>
+                          {(adminName||'A')[0].toUpperCase()}
+                        </div>
+                        <div style={{ minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:800, color:T.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{adminName}</div>
+                        </div>
+                      </div>
+                      <div style={{ display:'inline-flex', alignItems:'center', gap:5, marginTop:10, padding:'3px 9px', borderRadius:99, background:`${T.a2}18`, fontSize:10.5, fontWeight:700, color:T.a2 }}>
+                        <span style={{ width:6, height:6, borderRadius:'50%', background:T.a2 }} />
+                        Administrator
+                      </div>
                     </div>
-                    {[
-                      { icon:'👤', label:'My Profile',     action:() => { setModal('profile');  setProfileOpen(false); } },
-                      { icon:'⚙️', label:'Settings',        action:() => { setModal('settings'); setProfileOpen(false); } },
-                      { icon:'🔑', label:'Change Password', action:() => { setModal('password'); setProfileOpen(false); } },
-                    ].map(item => (
-                      <button key={item.label} onClick={item.action}
-                        style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding:'11px 14px', border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit', fontSize:13, color:T.textMid }}>
-                        {item.icon} {item.label}
-                      </button>
-                    ))}
-                    <div style={{ borderTop:`1px solid ${T.border}` }}>
+
+                    {/* Account actions */}
+                    <div style={{ padding:8 }}>
+                      {[
+                        { icon:'👤', label:'My Profile',     action:() => { setModal('profile');  setProfileOpen(false); } },
+                        { icon:'⚙️', label:'Settings',        action:() => { setModal('settings'); setProfileOpen(false); } },
+                        { icon:'🔑', label:'Change Password', action:() => { setModal('password'); setProfileOpen(false); } },
+                      ].map(item => (
+                        <button key={item.label} onClick={item.action}
+                          style={{ width:'100%', display:'flex', alignItems:'center', gap:11, padding:'10px 12px', borderRadius:9, border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight:600, color:T.textMid, textAlign:'left', transition:'background .15s' }}
+                          onMouseEnter={e => e.currentTarget.style.background = darkMode?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.045)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          <span style={{ fontSize:15, width:18, textAlign:'center' }}>{item.icon}</span>{item.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ height:1, background:T.border, margin:'2px 0' }} />
+
+                    {/* Sign out */}
+                    <div style={{ padding:8 }}>
                       <button onClick={() => { setProfileOpen(false); onLogout(); }}
-                        style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding:'11px 14px', border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit', fontSize:13, color:T.red }}>
-                        🚪 Sign Out
+                        style={{ width:'100%', display:'flex', alignItems:'center', gap:11, padding:'10px 12px', borderRadius:9, border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight:600, color:T.red, textAlign:'left', transition:'background .15s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = `${T.red}12`}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <span style={{ fontSize:15, width:18, textAlign:'center' }}>🚪</span>Sign Out
                       </button>
                     </div>
                   </motion.div>

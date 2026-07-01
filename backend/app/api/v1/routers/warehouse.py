@@ -1,3 +1,5 @@
+# backend/app/api/v1/routers/warehouse.py
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -5,8 +7,9 @@ from typing import Optional
 from app.db.database import get_db
 from app.db.models.warehouse import Warehouse
 from app.db.models.product import Product
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_admin
 from app.api.v1.schemas.warehouse_schema import WarehouseCreate, WarehouseUpdate
+from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/inventory/warehouses", tags=["Warehouses"])
 
@@ -21,30 +24,20 @@ def serialize(w: Warehouse, db: Session) -> dict:
     utilization_pct = round((total_stock / w.max_capacity) * 100, 1) if w.max_capacity else 0
 
     return {
-        "id": w.id,
-        "name": w.name,
-        "code": w.code,
-        "address": w.address,
-        "city": w.city,
-        "state": w.state,
-        "country": w.country,
-        "manager_name": w.manager_name,
-        "contact_number": w.contact_number,
-        "email": w.email,
-        "max_capacity": w.max_capacity,
-        "current_capacity": total_stock,
-        "remaining_capacity": remaining_capacity,
-        "utilization_pct": utilization_pct,
-        "status": w.status,
-        "sku_count": sku_count,
-        "total_stock": total_stock,
-        "total_value": total_value,
-        "low_stock_count": low_stock_count,
-        "created_at": w.created_at,
-        "updated_at": w.updated_at,
+        "id": w.id, "name": w.name, "code": w.code, "address": w.address,
+        "city": w.city, "state": w.state, "country": w.country,
+        "manager_name": w.manager_name, "contact_number": w.contact_number,
+        "email": w.email, "max_capacity": w.max_capacity,
+        "current_capacity": total_stock, "remaining_capacity": remaining_capacity,
+        "utilization_pct": utilization_pct, "status": w.status,
+        "sku_count": sku_count, "total_stock": total_stock,
+        "total_value": total_value, "low_stock_count": low_stock_count,
+        "created_at": w.created_at, "updated_at": w.updated_at,
         "warehouse": w.name,
     }
 
+
+# ---- RESTORED: these two GET endpoints were missing in the previous file ----
 
 @router.get("")
 def list_warehouses(
@@ -94,6 +87,13 @@ def create_warehouse(
     db.add(warehouse)
     db.commit()
     db.refresh(warehouse)
+
+    log_action(
+        db, module="warehouse", action="CREATE",
+        record_id=warehouse.id, record_label=warehouse.name,
+        user=current_user, detail=f"Created warehouse: {warehouse.name} ({warehouse.code})"
+    )
+
     return serialize(warehouse, db)
 
 
@@ -121,11 +121,21 @@ def update_warehouse(
         if dup:
             raise HTTPException(status_code=400, detail="Warehouse name or code already exists")
 
+    old_capacity = warehouse.max_capacity
+
     for field, value in data.items():
         setattr(warehouse, field, value)
 
     db.commit()
     db.refresh(warehouse)
+
+    log_action(
+        db, module="warehouse", action="UPDATE",
+        record_id=warehouse.id, record_label=warehouse.name,
+        user=current_user,
+        detail=f"Updated warehouse (capacity {old_capacity} → {warehouse.max_capacity})"
+    )
+
     return serialize(warehouse, db)
 
 
@@ -133,7 +143,7 @@ def update_warehouse(
 def delete_warehouse(
     warehouse_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_admin),
 ):
     warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
     if not warehouse:
@@ -146,6 +156,14 @@ def delete_warehouse(
             detail=f"Cannot delete: {in_use} product(s) still assigned to this warehouse",
         )
 
+    label = warehouse.name
     db.delete(warehouse)
     db.commit()
+
+    log_action(
+        db, module="warehouse", action="DELETE",
+        record_id=warehouse_id, record_label=label,
+        user=current_user, detail="Warehouse permanently deleted"
+    )
+
     return {"message": "Warehouse deleted"}
